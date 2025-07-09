@@ -491,7 +491,11 @@ export default function PropertiesPanel({
                         size="sm"
                         onClick={() => {
                           const currentText = selectedObject.text || "";
-                          const newText = currentText.toUpperCase();
+                          // Clean the text first, then convert to uppercase
+                          const cleanedText = currentText
+                            .replace(/\s+/g, " ")
+                            .trim();
+                          const newText = cleanedText.toUpperCase();
                           onUpdateObjectField("text", newText);
                           onFieldBlur();
                         }}
@@ -506,7 +510,11 @@ export default function PropertiesPanel({
                         size="sm"
                         onClick={() => {
                           const currentText = selectedObject.text || "";
-                          const newText = currentText.toLowerCase();
+                          // Clean the text first, then convert to lowercase
+                          const cleanedText = currentText
+                            .replace(/\s+/g, " ")
+                            .trim();
+                          const newText = cleanedText.toLowerCase();
                           onUpdateObjectField("text", newText);
                           onFieldBlur();
                         }}
@@ -521,9 +529,17 @@ export default function PropertiesPanel({
                         size="sm"
                         onClick={() => {
                           const currentText = selectedObject.text || "";
-                          const newText = currentText.replace(/\b\w/g, (l) =>
+                          // First clean the text, then convert to title case
+                          const cleanedText = currentText
+                            .replace(/\s+/g, " ")
+                            .trim()
+                            .toLowerCase();
+
+                          // Simple and reliable title case conversion
+                          const newText = cleanedText.replace(/\b\w/g, (l) =>
                             l.toUpperCase()
                           );
+
                           onUpdateObjectField("text", newText);
                           onFieldBlur();
                         }}

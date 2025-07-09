@@ -63,7 +63,6 @@ export function SignUpForm({
         );
 
         if (response?.status === 200) {
-          console.log("response", response?.data?.data);
           store.dispatch(setUserDetails(response?.data?.data));
 
           toast.success("Registration successfull", {

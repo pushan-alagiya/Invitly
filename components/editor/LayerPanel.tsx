@@ -98,7 +98,6 @@ export default function LayerPanel({
           <button
             onClick={() => {
               // Select all layers
-              console.log("Select all layers");
             }}
             className="p-1 text-gray-400 hover:text-gray-600"
             title="Select All"
@@ -108,7 +107,6 @@ export default function LayerPanel({
           <button
             onClick={() => {
               // Show/hide all layers
-              console.log("Toggle all layers visibility");
             }}
             className="p-1 text-gray-400 hover:text-gray-600"
             title="Toggle All Visibility"

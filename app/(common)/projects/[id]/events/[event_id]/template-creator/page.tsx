@@ -18,13 +18,18 @@ import {
   Trash2,
   ZoomIn,
   ZoomOut,
+  Keyboard,
+  Plus,
+  ChevronLeft,
+  ChevronRight,
+  GripVertical,
+  Edit3,
 } from "lucide-react";
 import { editorState, EditorObject } from "@/lib/editor-state";
 import JsonCanvas from "@/components/editor/JsonCanvas";
 import ElementsTab from "@/components/editor/sidebar/ElementsTab";
 import ImagesTab from "@/components/editor/sidebar/ImagesTab";
 import BackgroundsTab from "@/components/editor/sidebar/BackgroundsTab";
-import PagesTab from "@/components/editor/sidebar/PagesTab";
 import PropertiesPanel from "@/components/editor/sidebar/PropertiesPanel";
 import LayersPanel from "@/components/editor/sidebar/LayersPanel";
 import { Separator } from "@/components/ui/separator";
@@ -35,6 +40,17 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 export default function TemplateCreator() {
   const [project, setProject] = useState(editorState.getProject());
@@ -42,16 +58,37 @@ export default function TemplateCreator() {
   const [selectedObjectId, setSelectedObjectId] = useState(
     project.selectedObjectId
   );
+  const [selectedObjectIds, setSelectedObjectIds] = useState<string[]>([]);
   const [activeTab, setActiveTab] = useState("elements");
   const [showLayers, setShowLayers] = useState(false);
   const [showGrid, setShowGrid] = useState(false);
   const [showRuler, setShowRuler] = useState(false);
   const [zoomLevel, setZoomLevel] = useState(1);
+  const [clipboard, setClipboard] = useState<EditorObject[] | null>(null);
+  const [pageOffset, setPageOffset] = useState(0);
+  const [draggedPageId, setDraggedPageId] = useState<string | null>(null);
+  const [dragOverPageId, setDragOverPageId] = useState<string | null>(null);
+  const [editingPageName, setEditingPageName] = useState<string | null>(null);
+  const [editingPageNameValue, setEditingPageNameValue] = useState("");
 
   const currentPage =
     project.pages.find((p) => p.id === selectedPageId) || null;
   const selectedObject =
     currentPage?.objects.find((obj) => obj.id === selectedObjectId) || null;
+
+  // Pagination logic
+  const pagesPerView = 4;
+  const totalPages = project.pages.length;
+  const maxOffset = Math.max(0, totalPages - pagesPerView);
+  const showNavigation = totalPages > pagesPerView;
+
+  const goToPrevious = () => {
+    setPageOffset(Math.max(0, pageOffset - 1));
+  };
+
+  const goToNext = () => {
+    setPageOffset(Math.min(maxOffset, pageOffset + 1));
+  };
 
   // Subscribe to state changes
   useEffect(() => {
@@ -63,6 +100,400 @@ export default function TemplateCreator() {
 
     return unsubscribe;
   }, []);
+
+  // Drag and drop handlers
+  const handleDragStart = (e: React.DragEvent, pageId: string) => {
+    setDraggedPageId(pageId);
+    e.dataTransfer.effectAllowed = "move";
+    e.dataTransfer.setData("text/plain", pageId);
+  };
+
+  const handleDragOver = (e: React.DragEvent, pageId: string) => {
+    e.preventDefault();
+    if (draggedPageId && draggedPageId !== pageId) {
+      setDragOverPageId(pageId);
+    }
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    setDragOverPageId(null);
+  };
+
+  const handleDrop = (e: React.DragEvent, targetPageId: string) => {
+    e.preventDefault();
+    if (draggedPageId && draggedPageId !== targetPageId) {
+      // Get the current project from editorState to ensure we have the latest data
+      const currentProject = editorState.getProject();
+
+      // Reorder pages
+      const draggedIndex = currentProject.pages.findIndex(
+        (p) => p.id === draggedPageId
+      );
+      const targetIndex = currentProject.pages.findIndex(
+        (p) => p.id === targetPageId
+      );
+
+      if (draggedIndex !== -1 && targetIndex !== -1) {
+        const newPages = [...currentProject.pages];
+        const [draggedPage] = newPages.splice(draggedIndex, 1);
+        newPages.splice(targetIndex, 0, draggedPage);
+
+        // Update the project with reordered pages
+        editorState.updateProject({
+          ...currentProject,
+          pages: newPages,
+        });
+      }
+    }
+    setDraggedPageId(null);
+    setDragOverPageId(null);
+  };
+
+  const handleDragEnd = () => {
+    setDraggedPageId(null);
+    setDragOverPageId(null);
+  };
+
+  // Page name editing functions
+  const startEditingPageName = (pageId: string) => {
+    // Get the current project from editorState to ensure we have the latest data
+    const currentProject = editorState.getProject();
+    const page = currentProject.pages.find((p) => p.id === pageId);
+    if (page) {
+      setEditingPageName(pageId);
+      setEditingPageNameValue(page.name);
+    }
+  };
+
+  const savePageName = () => {
+    if (editingPageName && editingPageNameValue.trim()) {
+      // Get the current project from editorState to ensure we have the latest data
+      const currentProject = editorState.getProject();
+
+      const updatedPages = currentProject.pages.map((page) =>
+        page.id === editingPageName
+          ? { ...page, name: editingPageNameValue.trim() }
+          : page
+      );
+
+      editorState.updateProject({
+        ...currentProject,
+        pages: updatedPages,
+      });
+    }
+    setEditingPageName(null);
+    setEditingPageNameValue("");
+  };
+
+  const cancelEditingPageName = () => {
+    setEditingPageName(null);
+    setEditingPageNameValue("");
+  };
+
+  const handlePageNameKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter") {
+      savePageName();
+    } else if (e.key === "Escape") {
+      cancelEditingPageName();
+    }
+  };
+
+  // Page preview component
+  const PagePreview = ({ pageId }: { pageId: string }) => {
+    // Get the current project from editorState to ensure we have the latest data
+    const currentProject = editorState.getProject();
+    const page = currentProject.pages.find((p) => p.id === pageId);
+    if (!page) return null;
+
+    return (
+      <div className="bg-white border border-gray-200 rounded-lg shadow-lg p-2 w-48 h-32 overflow-hidden">
+        <div className="text-xs font-medium text-gray-600 mb-1 truncate">
+          {page.name}
+        </div>
+        <div className="relative w-full h-24 bg-gray-50 border border-gray-200 rounded overflow-hidden">
+          {/* Mini canvas preview */}
+          <div className="w-full h-full relative">
+            {page.objects.map((obj) => (
+              <div
+                key={obj.id}
+                className="absolute"
+                style={{
+                  left: `${(obj.left / 800) * 100}%`,
+                  top: `${(obj.top / 600) * 100}%`,
+                  width: `${((obj.width || 100) / 800) * 100}%`,
+                  height: `${((obj.height || 100) / 600) * 100}%`,
+                  transform: `scale(${obj.scaleX || 1}, ${
+                    obj.scaleY || 1
+                  }) rotate(${obj.angle || 0}deg)`,
+                  opacity: obj.opacity || 1,
+                }}
+              >
+                {obj.type === "text" && (
+                  <div
+                    className="text-xs leading-tight"
+                    style={{
+                      fontFamily: obj.fontFamily || "Arial",
+                      fontSize: `${Math.min(obj.fontSize || 12, 8)}px`,
+                      fontWeight: obj.fontWeight || "normal",
+                      fontStyle: obj.fontStyle || "normal",
+                      color: obj.fill || "#000000",
+                      backgroundColor: obj.textBackgroundColor || "transparent",
+                      textAlign:
+                        (obj.textAlign as
+                          | "left"
+                          | "center"
+                          | "right"
+                          | "justify") || "left",
+                      letterSpacing: `${obj.letterSpacing || 0}px`,
+                      lineHeight: obj.lineHeight || 1.2,
+                      wordSpacing: `${obj.wordSpacing || 0}px`,
+                      textDecoration:
+                        obj.textDecoration === "underline"
+                          ? "underline"
+                          : "none",
+                    }}
+                  >
+                    {obj.text}
+                  </div>
+                )}
+                {obj.type === "shape" && (
+                  <div
+                    className="w-full h-full"
+                    style={{
+                      backgroundColor: obj.fill || "#3B82F6",
+                      border: obj.strokeWidth
+                        ? `${obj.strokeWidth}px solid ${
+                            obj.stroke || "#000000"
+                          }`
+                        : "none",
+                      borderRadius: obj.cornerRadius
+                        ? `${obj.cornerRadius}px`
+                        : "0",
+                    }}
+                  />
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // Keyboard shortcuts handler
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Don't handle shortcuts if user is typing in an input field
+      if (
+        e.target instanceof HTMLInputElement ||
+        e.target instanceof HTMLTextAreaElement
+      ) {
+        return;
+      }
+
+      const isCtrlOrCmd = e.ctrlKey || e.metaKey;
+      const isShift = e.shiftKey;
+
+      // Text formatting shortcuts (only when a text object is selected)
+      if (selectedObject && selectedObject.type === "text") {
+        switch (e.key.toLowerCase()) {
+          case "b":
+            if (isCtrlOrCmd) {
+              e.preventDefault();
+              const newWeight =
+                selectedObject.fontWeight === "bold" ? "normal" : "bold";
+              updateObjectField("fontWeight", newWeight);
+              handleFieldBlur();
+            }
+            break;
+          case "i":
+            if (isCtrlOrCmd) {
+              e.preventDefault();
+              const newStyle =
+                selectedObject.fontStyle === "italic" ? "normal" : "italic";
+              updateObjectField("fontStyle", newStyle);
+              handleFieldBlur();
+            }
+            break;
+          case "u":
+            if (isCtrlOrCmd) {
+              e.preventDefault();
+              const newDecoration =
+                selectedObject.textDecoration === "underline"
+                  ? "none"
+                  : "underline";
+              updateObjectField("textDecoration", newDecoration);
+              handleFieldBlur();
+            }
+            break;
+          case "l":
+            if (isCtrlOrCmd) {
+              e.preventDefault();
+              updateObjectField("textAlign", "left");
+              handleFieldBlur();
+            }
+            break;
+          case "e":
+            if (isCtrlOrCmd) {
+              e.preventDefault();
+              updateObjectField("textAlign", "center");
+              handleFieldBlur();
+            }
+            break;
+          case "r":
+            if (isCtrlOrCmd) {
+              e.preventDefault();
+              updateObjectField("textAlign", "right");
+              handleFieldBlur();
+            }
+            break;
+          case "j":
+            if (isCtrlOrCmd) {
+              e.preventDefault();
+              updateObjectField("textAlign", "justify");
+              handleFieldBlur();
+            }
+            break;
+        }
+      }
+
+      // General shortcuts
+      switch (e.key.toLowerCase()) {
+        case "delete":
+          if (selectedObjectIds.length > 0) {
+            // Delete multiple objects
+            selectedObjectIds.forEach((id) => {
+              editorState.deleteObject(id);
+            });
+            setSelectedObjectIds([]);
+          } else if (selectedObjectId) {
+            // Delete single object
+            editorState.deleteObject(selectedObjectId);
+          }
+          break;
+        case "d":
+          if (isCtrlOrCmd) {
+            e.preventDefault();
+            duplicateObject();
+          }
+          break;
+        case "c":
+          if (isCtrlOrCmd) {
+            e.preventDefault();
+            copyObject();
+          }
+          break;
+        case "v":
+          if (isCtrlOrCmd) {
+            e.preventDefault();
+            handlePaste();
+          }
+          break;
+        case "z":
+          if (isCtrlOrCmd && !isShift) {
+            e.preventDefault();
+            handleUndo();
+          } else if (isCtrlOrCmd && isShift) {
+            e.preventDefault();
+            handleRedo();
+          }
+          break;
+        case "y":
+          if (isCtrlOrCmd) {
+            e.preventDefault();
+            handleRedo();
+          }
+          break;
+        case "s":
+          if (isCtrlOrCmd) {
+            e.preventDefault();
+            saveProject();
+          }
+          break;
+        case "equal":
+        case "+":
+          if (isCtrlOrCmd) {
+            e.preventDefault();
+            handleZoomIn();
+          }
+          break;
+        case "minus":
+        case "_":
+          if (isCtrlOrCmd) {
+            e.preventDefault();
+            handleZoomOut();
+          }
+          break;
+        case "0":
+          if (isCtrlOrCmd) {
+            e.preventDefault();
+            setZoomLevel(1);
+          }
+          break;
+        case "g":
+          if (isCtrlOrCmd) {
+            e.preventDefault();
+            toggleGrid();
+          }
+          break;
+        case "h":
+          if (isCtrlOrCmd) {
+            e.preventDefault();
+            setShowLayers(!showLayers);
+          }
+          break;
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [
+    selectedObject,
+    selectedObjectId,
+    showGrid,
+    showLayers,
+    selectedObjectIds,
+  ]);
+
+  // Keyboard shortcuts data for help popover
+  const keyboardShortcuts = [
+    {
+      category: "Text Formatting",
+      shortcuts: [
+        { key: "Ctrl/Cmd + B", description: "Bold" },
+        { key: "Ctrl/Cmd + I", description: "Italic" },
+        { key: "Ctrl/Cmd + U", description: "Underline" },
+        { key: "Ctrl/Cmd + L", description: "Align Left" },
+        { key: "Ctrl/Cmd + E", description: "Align Center" },
+        { key: "Ctrl/Cmd + R", description: "Align Right" },
+        { key: "Ctrl/Cmd + J", description: "Justify" },
+      ],
+    },
+    {
+      category: "General",
+      shortcuts: [
+        { key: "Delete", description: "Delete selected object" },
+        { key: "Ctrl/Cmd + D", description: "Duplicate object" },
+        { key: "Ctrl/Cmd + C", description: "Copy object" },
+        { key: "Ctrl/Cmd + V", description: "Paste object/text" },
+        { key: "Ctrl/Cmd + Z", description: "Undo" },
+        { key: "Ctrl/Cmd + Shift + Z", description: "Redo" },
+        { key: "Ctrl/Cmd + Y", description: "Redo" },
+        { key: "Ctrl/Cmd + S", description: "Save project" },
+      ],
+    },
+    {
+      category: "View",
+      shortcuts: [
+        { key: "Ctrl/Cmd + +", description: "Zoom In" },
+        { key: "Ctrl/Cmd + -", description: "Zoom Out" },
+        { key: "Ctrl/Cmd + 0", description: "Reset Zoom" },
+        { key: "Ctrl/Cmd + G", description: "Toggle Grid" },
+        { key: "Ctrl/Cmd + H", description: "Toggle Layers" },
+      ],
+    },
+  ];
 
   // Page actions
   const selectPage = (pageId: string) => {
@@ -87,6 +518,21 @@ export default function TemplateCreator() {
     editorState.selectObject(objectId);
   };
 
+  const handleMultiSelect = (objectIds: string[]) => {
+    setSelectedObjectIds(objectIds);
+    // For single selection, set the selectedObjectId for PropertiesPanel
+    // For multi-selection, clear selectedObjectId so PropertiesPanel doesn't show
+    const singleObjectId = objectIds.length === 1 ? objectIds[0] : null;
+    setSelectedObjectId(singleObjectId);
+
+    // Also update the editor state for single object selection
+    if (singleObjectId) {
+      editorState.selectObject(singleObjectId);
+    } else {
+      editorState.selectObject(null);
+    }
+  };
+
   const addText = () => {
     const newText: EditorObject = {
       id: `text-${Date.now()}`,
@@ -108,14 +554,121 @@ export default function TemplateCreator() {
   };
 
   const duplicateObject = () => {
-    if (selectedObjectId) {
+    if (selectedObjectIds.length > 0) {
+      // Duplicate multiple objects
+      selectedObjectIds.forEach((id) => {
+        editorState.duplicateObject(id);
+      });
+    } else if (selectedObjectId) {
       editorState.duplicateObject(selectedObjectId);
     }
   };
 
-  const deleteObject = () => {
-    if (selectedObjectId) {
-      editorState.deleteObject(selectedObjectId);
+  const copyObject = () => {
+    if (selectedObjectIds.length > 0) {
+      // Copy multiple objects
+      const copiedObjects = selectedObjectIds
+        .map((id, index) => {
+          const obj = currentPage?.objects.find((o) => o.id === id);
+          if (obj) {
+            return {
+              ...obj,
+              id: `copied-${Date.now()}-${index}`,
+              left: obj.left + 20,
+              top: obj.top + 20,
+            };
+          }
+          return null;
+        })
+        .filter(Boolean) as EditorObject[];
+
+      setClipboard(copiedObjects);
+    } else if (selectedObject) {
+      // Copy single object
+      const copiedObject: EditorObject = {
+        ...selectedObject,
+        id: `copied-${Date.now()}`,
+        left: selectedObject.left + 20,
+        top: selectedObject.top + 20,
+        // Ensure all shape properties are preserved
+        shapeType: selectedObject.shapeType,
+        cornerRadius: selectedObject.cornerRadius,
+        strokeWidth: selectedObject.strokeWidth,
+        stroke: selectedObject.stroke,
+        fill: selectedObject.fill,
+        opacity: selectedObject.opacity,
+        angle: selectedObject.angle,
+        scaleX: selectedObject.scaleX,
+        scaleY: selectedObject.scaleY,
+        width: selectedObject.width,
+        height: selectedObject.height,
+        // Preserve text properties
+        text: selectedObject.text,
+        fontSize: selectedObject.fontSize,
+        fontFamily: selectedObject.fontFamily,
+        fontWeight: selectedObject.fontWeight,
+        fontStyle: selectedObject.fontStyle,
+        textDecoration: selectedObject.textDecoration,
+        textAlign: selectedObject.textAlign,
+        textBackgroundColor: selectedObject.textBackgroundColor,
+        letterSpacing: selectedObject.letterSpacing,
+        lineHeight: selectedObject.lineHeight,
+        wordSpacing: selectedObject.wordSpacing,
+        textShadow: selectedObject.textShadow,
+        listType: selectedObject.listType,
+        listStyle: selectedObject.listStyle,
+      };
+      setClipboard([copiedObject]);
+    }
+  };
+
+  const pasteObject = () => {
+    if (clipboard && currentPage) {
+      const timestamp = Date.now();
+      // Paste multiple objects
+      clipboard.forEach((obj, index) => {
+        const pastedObject: EditorObject = {
+          ...obj,
+          id: `pasted-${timestamp}-${index}`,
+          left: obj.left + index * 10,
+          top: obj.top + index * 10,
+        };
+        editorState.addObject(pastedObject);
+      });
+    }
+  };
+
+  const pasteText = async () => {
+    try {
+      const text = await navigator.clipboard.readText();
+      if (text && currentPage) {
+        // Create a new text object with the pasted content
+        const newText: EditorObject = {
+          id: `text-${Date.now()}`,
+          type: "text",
+          left: 100,
+          top: 100,
+          text: text,
+          fontSize: 24,
+          fontFamily: "Arial",
+          fill: "#000000",
+          width: 200,
+          height: 30,
+        };
+        editorState.addObject(newText);
+      }
+    } catch (error) {
+      console.log("Could not read clipboard text:", error);
+    }
+  };
+
+  const handlePaste = () => {
+    if (clipboard && clipboard.length > 0) {
+      // If we have copied objects, paste them
+      pasteObject();
+    } else {
+      // Otherwise try to paste text from clipboard
+      pasteText();
     }
   };
 
@@ -222,6 +775,32 @@ export default function TemplateCreator() {
     editorState.moveObjectDown(objectId);
   };
 
+  const reorderObjects = (fromIndex: number, toIndex: number) => {
+    if (!currentPage) return;
+
+    // Get the current project from editorState to ensure we have the latest data
+    const currentProject = editorState.getProject();
+    const currentPageFromState = currentProject.pages.find(
+      (p) => p.id === currentPage.id
+    );
+
+    if (!currentPageFromState) return;
+
+    const newObjects = [...currentPageFromState.objects];
+    const [movedObject] = newObjects.splice(fromIndex, 1);
+    newObjects.splice(toIndex, 0, movedObject);
+
+    // Update the page with reordered objects
+    const updatedPages = currentProject.pages.map((page) =>
+      page.id === currentPage.id ? { ...page, objects: newObjects } : page
+    );
+
+    editorState.updateProject({
+      ...currentProject,
+      pages: updatedPages,
+    });
+  };
+
   return (
     <div className="flex h-screen bg-gray-50">
       {/* Left Sidebar - Tools */}
@@ -242,7 +821,7 @@ export default function TemplateCreator() {
           onValueChange={setActiveTab}
           className="flex-1 flex flex-col min-h-0"
         >
-          <TabsList className="grid w-full grid-cols-2 grid-rows-2 h-fit gap-2 p-2 flex-shrink-0">
+          <TabsList className="grid w-full grid-cols-3 h-fit gap-2 p-2 flex-shrink-0">
             <TabsTrigger
               value="elements"
               className="flex items-center justify-center gap-2 text-sm font-medium px-3 py-2 data-[state=active]:bg-white data-[state=active]:shadow-sm rounded-md transition-all"
@@ -263,13 +842,6 @@ export default function TemplateCreator() {
             >
               <Palette className="w-4 h-4" />
               <span>Backgrounds</span>
-            </TabsTrigger>
-            <TabsTrigger
-              value="pages"
-              className="flex items-center justify-center gap-2 text-sm font-medium px-3 py-2 data-[state=active]:bg-white data-[state=active]:shadow-sm rounded-md transition-all"
-            >
-              <FileText className="w-4 h-4" />
-              <span>Pages</span>
             </TabsTrigger>
           </TabsList>
 
@@ -300,17 +872,6 @@ export default function TemplateCreator() {
                 onBackgroundPatternSelect={selectBackgroundPattern}
               />
             </TabsContent>
-
-            <TabsContent value="pages" className="mt-0 h-full">
-              <PagesTab
-                pages={project.pages}
-                selectedPageId={selectedPageId}
-                onPageSelect={selectPage}
-                onPageDuplicate={duplicatePage}
-                onPageDelete={deletePage}
-                onPageAdd={addPage}
-              />
-            </TabsContent>
           </div>
         </Tabs>
       </div>
@@ -321,9 +882,32 @@ export default function TemplateCreator() {
         <div className="bg-white border-b border-gray-200 p-2 lg:p-4 z-10 flex-shrink-0">
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2 lg:gap-4 min-w-0">
-              <h1 className="text-base lg:text-xl font-semibold text-gray-800 truncate">
-                {currentPage?.name || "Wedding Invitation"}
-              </h1>
+              {editingPageName ? (
+                <input
+                  type="text"
+                  value={editingPageNameValue}
+                  onChange={(e) => setEditingPageNameValue(e.target.value)}
+                  onBlur={savePageName}
+                  onKeyDown={handlePageNameKeyDown}
+                  className="text-base lg:text-xl font-semibold text-gray-800 focus:outline-none bg-transparent border-b border-gray-300 focus:border-primary px-1"
+                  autoFocus
+                />
+              ) : (
+                <div className="flex items-center gap-2 group">
+                  <h1 className="text-base lg:text-xl font-semibold text-gray-800 truncate">
+                    {currentPage?.name || "Wedding Invitation"}
+                  </h1>
+                  {currentPage && (
+                    <button
+                      onClick={() => startEditingPageName(currentPage.id)}
+                      className="opacity-0 group-hover:opacity-100 transition-opacity duration-200 p-1 hover:bg-gray-100 rounded"
+                      title="Edit page name"
+                    >
+                      <Edit3 className="w-4 h-4 text-gray-500 hover:text-gray-700" />
+                    </button>
+                  )}
+                </div>
+              )}
               {selectedObject && (
                 <span className="text-xs lg:text-sm text-gray-500 hidden sm:inline">
                   Selected: {selectedObject.type}
@@ -333,7 +917,7 @@ export default function TemplateCreator() {
 
             <div className="flex items-center gap-1 lg:gap-2 flex-shrink-0">
               {/* Duplicate/Delete - only show when object is selected */}
-              {selectedObject && (
+              {(selectedObject || selectedObjectIds.length > 0) && (
                 <>
                   <Button
                     variant="outline"
@@ -347,7 +931,18 @@ export default function TemplateCreator() {
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={deleteObject}
+                    onClick={() => {
+                      if (selectedObjectIds.length > 0) {
+                        // Delete multiple objects
+                        selectedObjectIds.forEach((id) => {
+                          editorState.deleteObject(id);
+                        });
+                        setSelectedObjectIds([]);
+                      } else if (selectedObjectId) {
+                        // Delete single object
+                        editorState.deleteObject(selectedObjectId);
+                      }
+                    }}
                     className="h-8 px-2 lg:px-3 text-red-600 hover:text-red-700 hover:bg-red-50"
                   >
                     <Trash2 className="w-3 h-3 lg:w-4 lg:h-4 " />
@@ -379,6 +974,61 @@ export default function TemplateCreator() {
                 <Redo className="w-3 h-3 lg:w-4 lg:h-4 " />
                 {/* <span className="hidden sm:inline">Redo</span> */}
               </Button>
+
+              <Separator orientation="vertical" className="h-8" />
+
+              {/* Help Button */}
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-8 px-2 lg:px-3"
+                  >
+                    <Keyboard className="w-3 h-3 lg:w-4 lg:h-4" />
+                    {/* <span className="hidden sm:inline ml-1">Help</span> */}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-80 p-3 " align="end">
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2 pb-2 border-b border-gray-200">
+                      <Keyboard className="w-4 h-4 text-primary" />
+                      <h3 className="font-semibold text-base">
+                        Keyboard Shortcuts
+                      </h3>
+                    </div>
+                    <div className="space-y-3 max-h-96 overflow-y-auto">
+                      {keyboardShortcuts.map((category) => (
+                        <div key={category.category}>
+                          <h4 className="font-medium text-xs text-gray-700 mb-1.5 uppercase tracking-wide">
+                            {category.category}
+                          </h4>
+                          <div className="grid grid-cols-1 gap-1">
+                            {category.shortcuts.map((shortcut) => (
+                              <div
+                                key={shortcut.key}
+                                className="flex items-center justify-between text-xs py-0.5"
+                              >
+                                <span className="text-gray-600 truncate">
+                                  {shortcut.description}
+                                </span>
+                                <kbd className="px-1.5 py-0.5 bg-gray-100 border border-gray-300 rounded text-xs font-mono ml-2 flex-shrink-0">
+                                  {shortcut.key}
+                                </kbd>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="pt-2 border-t border-gray-200">
+                      <p className="text-xs text-gray-500">
+                        💡 Text formatting shortcuts work when text is selected
+                      </p>
+                    </div>
+                  </div>
+                </PopoverContent>
+              </Popover>
 
               <Separator orientation="vertical" className="h-8" />
 
@@ -485,6 +1135,7 @@ export default function TemplateCreator() {
               <JsonCanvas
                 page={currentPage}
                 onObjectSelect={handleObjectSelect}
+                onMultiSelect={handleMultiSelect}
                 showGrid={showGrid}
                 showRuler={showRuler}
                 zoomLevel={zoomLevel}
@@ -508,14 +1159,178 @@ export default function TemplateCreator() {
           </div>
         </div>
 
+        {/* Pages Bar */}
+        <div className="bg-gradient-to-r from-gray-50 to-white border-t border-gray-200 p-2 lg:p-3 z-10 flex-shrink-0">
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-medium text-gray-500 uppercase tracking-wide flex-shrink-0 w-12">
+              Pages
+            </span>
+
+            {/* Navigation buttons - always rendered but conditionally visible */}
+            <div className="flex-shrink-0 w-6 h-6">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={goToPrevious}
+                disabled={pageOffset === 0 || !showNavigation}
+                className="h-6 w-6 p-0 bg-white hover:bg-primary/10 border-gray-300 hover:border-primary transition-all duration-150 disabled:opacity-0 disabled:pointer-events-none"
+                title="Previous pages"
+              >
+                <ChevronLeft className="w-3 h-3 text-gray-600" />
+              </Button>
+            </div>
+
+            {/* Visible pages - left aligned */}
+            <div className="flex items-center gap-2 overflow-hidden">
+              <div className="flex items-center gap-2 transition-all duration-300 ease-in-out">
+                {project.pages
+                  .slice(pageOffset, pageOffset + pagesPerView)
+                  .map((page, index) => (
+                    <TooltipProvider key={page.id}>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <div
+                            className={`flex items-center gap-1 flex-shrink-0 transition-all duration-300 ease-in-out ${
+                              index === 0
+                                ? "animate-fade-in"
+                                : index === 1
+                                ? "animate-fade-in [animation-delay:0.1s]"
+                                : index === 2
+                                ? "animate-fade-in [animation-delay:0.2s]"
+                                : "animate-fade-in [animation-delay:0.3s]"
+                            }`}
+                            draggable
+                            onDragStart={(e) => handleDragStart(e, page.id)}
+                            onDragOver={(e) => handleDragOver(e, page.id)}
+                            onDragLeave={handleDragLeave}
+                            onDrop={(e) => handleDrop(e, page.id)}
+                            onDragEnd={handleDragEnd}
+                          >
+                            <div
+                              className={`flex items-center gap-1 rounded-full px-3 py-1.5 transition-all duration-200 cursor-pointer relative ${
+                                selectedPageId === page.id
+                                  ? "bg-primary text-primary-foreground shadow-md"
+                                  : "bg-white hover:bg-primary/10 border border-gray-300 hover:border-primary"
+                              } ${
+                                draggedPageId === page.id ? "opacity-50" : ""
+                              }`}
+                              onClick={() => selectPage(page.id)}
+                            >
+                              {/* Drag overlay for visual feedback */}
+                              {dragOverPageId === page.id && (
+                                <div className="absolute inset-0 border-2 border-dashed border-primary rounded-full pointer-events-none" />
+                              )}
+
+                              {/* Drag handle */}
+                              <GripVertical className="w-3 h-3 text-gray-400 hover:text-gray-600 cursor-grab active:cursor-grabbing" />
+
+                              <div className="flex items-center gap-1">
+                                <FileText
+                                  className={`w-3 h-3 lg:w-4 lg:h-4 ${
+                                    selectedPageId === page.id
+                                      ? "text-primary-foreground"
+                                      : "text-gray-600"
+                                  }`}
+                                />
+                                <span
+                                  className={`text-xs lg:text-sm font-medium ${
+                                    selectedPageId === page.id
+                                      ? "text-primary-foreground"
+                                      : "text-gray-700"
+                                  }`}
+                                >
+                                  {page.name}
+                                </span>
+                              </div>
+
+                              {/* Action buttons within the same container */}
+                              <div className="flex items-center gap-0.5 ml-1">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    duplicatePage(page.id);
+                                  }}
+                                  className={`h-5 w-5 p-0 rounded-full transition-all duration-150 hover:scale-110 ${
+                                    selectedPageId === page.id
+                                      ? "text-primary-foreground hover:bg-primary-foreground/20"
+                                      : "text-gray-500 hover:bg-primary/20"
+                                  }`}
+                                  title="Duplicate page"
+                                >
+                                  <Copy className="w-2.5 h-2.5" />
+                                </Button>
+                                {project.pages.length > 1 && (
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      deletePage(page.id);
+                                    }}
+                                    className={`h-5 w-5 p-0 rounded-full transition-all duration-150 hover:scale-110 ${
+                                      selectedPageId === page.id
+                                        ? "text-primary-foreground hover:bg-red-500/20"
+                                        : "text-gray-500 hover:bg-red-500/20"
+                                    }`}
+                                    title="Delete page"
+                                  >
+                                    <Trash2 className="w-2.5 h-2.5" />
+                                  </Button>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </TooltipTrigger>
+                        <TooltipContent
+                          side="top"
+                          className="p-0 border-0 bg-transparent"
+                        >
+                          <PagePreview pageId={page.id} />
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  ))}
+              </div>
+            </div>
+
+            {/* Navigation buttons - always rendered but conditionally visible */}
+            <div className="flex-shrink-0 w-6 h-6">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={goToNext}
+                disabled={pageOffset === maxOffset || !showNavigation}
+                className="h-6 w-6 p-0 bg-white hover:bg-primary/10 border-gray-300 hover:border-primary transition-all duration-150 disabled:opacity-0 disabled:pointer-events-none"
+                title="Next pages"
+              >
+                <ChevronRight className="w-3 h-3 text-gray-600" />
+              </Button>
+            </div>
+
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={addPage}
+              className="flex-shrink-0 bg-white hover:bg-green-50 border-gray-300 hover:border-green-300 transition-all duration-200 w-16"
+            >
+              <Plus className="w-3 h-3 lg:w-4 lg:h-4 mr-1 text-green-600" />
+              <span className="text-xs lg:text-sm font-medium text-green-700">
+                Add
+              </span>
+            </Button>
+          </div>
+        </div>
+
         {/* Right Side Panels - Sticky positioning */}
-        <div className="absolute top-[65px] right-0 h-full flex z-20 pointer-events-none max-h-[calc(100vh-65px)]">
+        <div className="absolute top-[69px] right-0 h-full flex z-20 pointer-events-none max-h-[calc(100vh-69px)]">
           {/* Layers Panel */}
           {showLayers && (
             <div className="pointer-events-auto">
               <LayersPanel
                 currentPage={currentPage}
-                selectedObjectId={selectedObjectId}
+                selectedObjectIds={selectedObjectIds}
                 onObjectSelect={handleObjectSelect}
                 onMoveObjectUp={moveSpecificObjectUp}
                 onMoveObjectDown={moveSpecificObjectDown}
@@ -525,6 +1340,7 @@ export default function TemplateCreator() {
                 onDeleteObject={(objectId) =>
                   editorState.deleteObject(objectId)
                 }
+                onReorderObjects={reorderObjects}
               />
             </div>
           )}

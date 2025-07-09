@@ -7,6 +7,7 @@ import { EditorPage, EditorObject, editorState } from "@/lib/editor-state";
 interface JsonCanvasProps {
   page: EditorPage;
   onObjectSelect: (objectId: string | null) => void;
+  onMultiSelect?: (objectIds: string[]) => void;
   showGrid?: boolean;
   showRuler?: boolean;
   zoomLevel?: number;
@@ -27,12 +28,15 @@ interface FabricObjectWithData extends fabric.Object {
 export default function JsonCanvas({
   page,
   onObjectSelect,
+  onMultiSelect,
   showGrid = false,
   showRuler = false,
   zoomLevel = 1,
 }: JsonCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fabricCanvasRef = useRef<fabric.Canvas | null>(null);
+  const selectionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const isSelectionChangingRef = useRef(false);
 
   // Helper function to convert numbers to Roman numerals
   const toRoman = (num: number): string => {
@@ -160,7 +164,8 @@ export default function JsonCanvas({
           hoverCursor: "default",
         });
         (line as FabricObjectWithData).data = { isGridLine: true };
-        canvas.add(line);
+        // Insert at the beginning to ensure it's at the back
+        canvas.insertAt(0, line);
       }
 
       // Draw horizontal lines
@@ -173,7 +178,8 @@ export default function JsonCanvas({
           hoverCursor: "default",
         });
         (line as FabricObjectWithData).data = { isGridLine: true };
-        canvas.add(line);
+        // Insert at the beginning to ensure it's at the back
+        canvas.insertAt(0, line);
       }
     }
 
@@ -592,7 +598,6 @@ export default function JsonCanvas({
 
     // Text-specific properties
     if (obj.type === "text" && fabricObject.type === "i-text") {
-      updates.text = obj.text || "";
       updates.fontSize = obj.fontSize || 24;
       updates.fontFamily = obj.fontFamily || "Arial";
       updates.fontWeight = obj.fontWeight || "normal";
@@ -605,18 +610,11 @@ export default function JsonCanvas({
       (fabricObject as fabric.IText).underline =
         obj.textDecoration === "underline";
 
-      // Handle word spacing by adding extra spaces between words
-      if (obj.wordSpacing && obj.wordSpacing > 0) {
-        const words = obj.text?.split(" ") || [];
-        const extraSpaces = " ".repeat(Math.floor(obj.wordSpacing / 2)); // Approximate spacing
-        const spacedText = words.join(extraSpaces);
-        updates.text = spacedText;
-      }
+      // Start with the original text
+      let processedText = obj.text || "";
 
-      // Handle list formatting
+      // Handle list formatting first
       if (obj.listType && obj.listType !== "none") {
-        let formattedText = obj.text || "";
-
         // Helper function to strip existing list formatting
         const stripListFormatting = (text: string): string => {
           return text
@@ -675,18 +673,14 @@ export default function JsonCanvas({
         };
 
         // Always strip existing formatting first, then apply new formatting
-        formattedText = stripListFormatting(formattedText);
-        formattedText = applyListFormatting(
-          formattedText,
+        processedText = stripListFormatting(processedText);
+        processedText = applyListFormatting(
+          processedText,
           obj.listType,
           obj.listStyle
         );
-
-        updates.text = formattedText;
       } else {
         // Handle case where list formatting should be removed (listType is empty, "none", or undefined)
-        let formattedText = obj.text || "";
-
         // Helper function to strip existing list formatting
         const stripListFormatting = (text: string): string => {
           return text
@@ -702,12 +696,21 @@ export default function JsonCanvas({
         };
 
         // Strip existing formatting when list formatting is being removed
-        formattedText = stripListFormatting(formattedText);
-        updates.text = formattedText;
+        processedText = stripListFormatting(processedText);
       }
 
+      // Handle word spacing after list formatting
+      if (obj.wordSpacing && obj.wordSpacing > 0) {
+        const words = processedText.split(" ");
+        const extraSpaces = " ".repeat(Math.floor(obj.wordSpacing / 2)); // Approximate spacing
+        processedText = words.join(extraSpaces);
+      }
+
+      // Set the final processed text
+      updates.text = processedText;
+
       // Handle text shadow
-      if (obj.textShadow) {
+      if (obj.textShadow !== undefined) {
         updates.shadow = new fabric.Shadow({
           color: obj.textShadow.color,
           blur: obj.textShadow.blur,
@@ -764,12 +767,6 @@ export default function JsonCanvas({
   useEffect(() => {
     if (!canvasRef.current) return;
 
-    console.log(
-      "Initializing canvas with dimensions:",
-      page.width,
-      page.height
-    );
-
     const canvas = new fabric.Canvas(canvasRef.current, {
       width: page.width,
       height: page.height,
@@ -780,7 +777,6 @@ export default function JsonCanvas({
     });
 
     fabricCanvasRef.current = canvas;
-    console.log("Canvas initialized:", canvas);
 
     // Add custom delete control - ensure controls object exists
     if (!fabric.Object.prototype.controls) {
@@ -807,44 +803,38 @@ export default function JsonCanvas({
     canvas.preserveObjectStacking = true;
     canvas.controlsAboveOverlay = true;
 
-    // Debug: Log the controls setup
-    console.log("Delete control setup:", {
-      objectControls: fabric.Object.prototype.controls,
-      groupControls: fabric.Group.prototype.controls,
-      objectHasControls: fabric.Object.prototype.hasControls,
-      groupHasControls: fabric.Group.prototype.hasControls,
-    });
+    // Handle object selection - unified logic
+    const handleSelectionCreated = (e: { selected?: fabric.Object[] }) => {
+      // Mark that we're in a selection change
+      isSelectionChangingRef.current = true;
 
-    // Handle object selection - pure Fabric.js behavior
-    canvas.on("selection:created", (e) => {
-      console.log("Selection created:", e);
-      console.log("Selected objects:", e.selected);
-      console.log("Selected objects length:", e.selected?.length);
+      // Clear any pending selection clear timeout
+      if (selectionTimeoutRef.current) {
+        clearTimeout(selectionTimeoutRef.current);
+        selectionTimeoutRef.current = null;
+      }
 
       // Check if this is a group selection (multiple objects)
       if (e.selected && e.selected.length > 1) {
-        // For group selections, we don't set a specific object as selected
-        // The delete button will appear on the group's selection box
-        console.log(
-          "Group selection created with",
-          e.selected.length,
-          "objects"
-        );
+        // Clear individual selection for multi-selection
+        onObjectSelect(null);
 
-        // Check if a group was actually created
+        // Call onMultiSelect with the selected object IDs
+        if (onMultiSelect) {
+          const selectedIds = e.selected
+            .map(
+              (obj: fabric.Object) =>
+                (obj as FabricObjectWithData).data?.objectId
+            )
+            .filter(Boolean) as string[];
+          onMultiSelect(selectedIds);
+        }
+
+        // Ensure the group has the delete control
         const activeObject = canvas.getActiveObject();
-        console.log("Active object type:", activeObject?.type);
-        console.log("Active object:", activeObject);
-
         if (activeObject && activeObject.type === "group") {
-          console.log("Active group found:", activeObject);
-
           // Use a timeout to ensure the group is fully created
           setTimeout(() => {
-            console.log(
-              "Timeout executed, checking group again:",
-              activeObject
-            );
             if (!activeObject.controls) {
               activeObject.controls = {};
             }
@@ -857,78 +847,56 @@ export default function JsonCanvas({
               deleteControl: true,
             });
 
-            console.log("Group controls after setup:", activeObject.controls);
-            console.log("Group hasControls:", activeObject.hasControls);
-            console.log("Group hasBorders:", activeObject.hasBorders);
-
             canvas.renderAll();
-            console.log("Delete control applied to group after timeout");
-          }, 100); // Increased timeout
-        } else {
-          console.log("No group found, active object is:", activeObject);
-
-          // Try to manually create a group if multiple objects are selected
-          if (e.selected && e.selected.length > 1) {
-            console.log("Attempting to create group manually");
-            try {
-              const group = new fabric.Group(e.selected, {
-                left: 0,
-                top: 0,
-                hasControls: true,
-                hasBorders: true,
-              });
-
-              // Add delete control to the group
-              if (!group.controls) {
-                group.controls = {};
-              }
-              group.controls.deleteControl = deleteControl;
-              group.hasControls = true;
-              group.hasBorders = true;
-
-              // Remove individual objects and add group
-              e.selected.forEach((obj) => {
-                canvas.remove(obj);
-              });
-
-              canvas.add(group);
-              canvas.setActiveObject(group);
-              canvas.renderAll();
-
-              console.log("Group created manually:", group);
-            } catch (error) {
-              console.error("Error creating group:", error);
-            }
-          }
+          }, 50);
         }
-
-        onObjectSelect(null); // Clear individual selection
       } else {
         // Single object selection
         const activeObject = e.selected?.[0] as FabricObjectWithData;
         if (activeObject?.data?.objectId) {
           onObjectSelect(activeObject.data.objectId);
+          // For single object selection, pass the object ID in an array to onMultiSelect
+          if (onMultiSelect) {
+            onMultiSelect([activeObject.data.objectId]);
+          }
         }
       }
-    });
 
-    canvas.on("selection:updated", (e) => {
-      console.log("Selection updated:", e);
+      // Reset the selection change flag after a short delay
+      setTimeout(() => {
+        isSelectionChangingRef.current = false;
+      }, 100);
+    };
+
+    const handleSelectionUpdated = (e: { selected?: fabric.Object[] }) => {
+      // Mark that we're in a selection change
+      isSelectionChangingRef.current = true;
+
+      // Clear any pending selection clear timeout
+      if (selectionTimeoutRef.current) {
+        clearTimeout(selectionTimeoutRef.current);
+        selectionTimeoutRef.current = null;
+      }
 
       // Check if this is a group selection (multiple objects)
       if (e.selected && e.selected.length > 1) {
-        // For group selections, we don't set a specific object as selected
-        console.log(
-          "Group selection updated with",
-          e.selected.length,
-          "objects"
-        );
+        // Clear individual selection for multi-selection
+        onObjectSelect(null);
 
-        // Ensure the group has the delete control by accessing the active object
+        // Call onMultiSelect with the selected object IDs
+        if (onMultiSelect) {
+          const selectedIds = e.selected
+            .map(
+              (obj: fabric.Object) =>
+                (obj as FabricObjectWithData).data?.objectId
+            )
+            .filter(Boolean) as string[];
+          onMultiSelect(selectedIds);
+        }
+
+        // Ensure the group has the delete control
         const activeObject = canvas.getActiveObject();
         if (activeObject && activeObject.type === "group") {
-          console.log("Active group updated:", activeObject);
-
           // Use a timeout to ensure the group is fully updated
           setTimeout(() => {
             if (!activeObject.controls) {
@@ -944,26 +912,57 @@ export default function JsonCanvas({
             });
 
             canvas.renderAll();
-            console.log(
-              "Delete control applied to updated group after timeout"
-            );
-          }, 10);
+          }, 50);
         }
-
-        onObjectSelect(null); // Clear individual selection
       } else {
         // Single object selection
         const activeObject = e.selected?.[0] as FabricObjectWithData;
         if (activeObject?.data?.objectId) {
           onObjectSelect(activeObject.data.objectId);
+          // For single object selection, pass the object ID in an array to onMultiSelect
+          if (onMultiSelect) {
+            onMultiSelect([activeObject.data.objectId]);
+          }
         }
       }
-    });
 
-    canvas.on("selection:cleared", () => {
-      console.log("Selection cleared");
-      onObjectSelect(null);
-    });
+      // Reset the selection change flag after a short delay
+      setTimeout(() => {
+        isSelectionChangingRef.current = false;
+      }, 100);
+    };
+
+    const handleSelectionCleared = () => {
+      // Clear any existing timeout
+      if (selectionTimeoutRef.current) {
+        clearTimeout(selectionTimeoutRef.current);
+      }
+
+      // Only clear selection if we're not in the middle of a selection change
+      // and if there's really no active object after a longer delay
+      selectionTimeoutRef.current = setTimeout(() => {
+        // Check if we're still in a selection change
+        if (isSelectionChangingRef.current) {
+          return;
+        }
+
+        const activeObject = canvas.getActiveObject();
+        if (!activeObject) {
+          // Only clear if there's really no active object
+          onObjectSelect(null);
+          // Clear multi-selection
+          if (onMultiSelect) {
+            onMultiSelect([]);
+          }
+        }
+        selectionTimeoutRef.current = null;
+      }, 150); // Increased delay to 150ms
+    };
+
+    // Set up event handlers
+    canvas.on("selection:created", handleSelectionCreated);
+    canvas.on("selection:updated", handleSelectionUpdated);
+    canvas.on("selection:cleared", handleSelectionCleared);
 
     // Handle object moving - capture position changes during drag
     canvas.on("object:moving", (e) => {
@@ -981,8 +980,8 @@ export default function JsonCanvas({
         // Update state silently during movement
         editorState.updateObjectSilent(object.data.objectId, updates);
 
-        // NO underline updates during movement - this causes lag
-        // Underlines will be updated when movement ends
+        // Force a render to update any UI components that depend on object position
+        canvas.renderAll();
       }
     });
 
@@ -994,6 +993,11 @@ export default function JsonCanvas({
       // Clear moving flag
       object.isMoving = false;
 
+      // Get the original object to preserve properties that Fabric.js doesn't handle
+      const originalObject = page?.objects.find(
+        (obj) => obj.id === object.data?.objectId
+      );
+
       const updates: Partial<EditorObject> = {
         left: object.left || 0,
         top: object.top || 0,
@@ -1004,7 +1008,18 @@ export default function JsonCanvas({
 
       // Handle text-specific properties
       if (object.type === "i-text") {
-        updates.text = (object as fabric.IText).text || "";
+        let textContent = (object as fabric.IText).text || "";
+
+        // Apply word spacing to the text content if it exists in the original object
+        if (originalObject?.wordSpacing && originalObject.wordSpacing > 0) {
+          const words = textContent.split(" ");
+          const extraSpaces = " ".repeat(
+            Math.floor(originalObject.wordSpacing / 2)
+          );
+          textContent = words.join(extraSpaces);
+        }
+
+        updates.text = textContent;
         updates.fontSize = (object as fabric.IText).fontSize || 24;
         updates.fontFamily = (object as fabric.IText).fontFamily || "Arial";
         updates.fontWeight = String(
@@ -1016,8 +1031,19 @@ export default function JsonCanvas({
         updates.letterSpacing = (object as fabric.IText).charSpacing || 0;
         updates.lineHeight = (object as fabric.IText).lineHeight || 1.2;
         updates.textAlign = (object as fabric.IText).textAlign || "left";
-        // Note: wordSpacing is not supported in Fabric.js IText
-        // Note: textDecoration is not a standard property on IText, we'll handle it differently
+        updates.textDecoration = (object as fabric.IText).underline
+          ? "underline"
+          : "none";
+
+        // Preserve properties that Fabric.js doesn't handle directly
+        if (originalObject) {
+          updates.wordSpacing = originalObject.wordSpacing;
+          updates.textShadow = originalObject.textShadow;
+          updates.textBackgroundColor = originalObject.textBackgroundColor;
+          updates.listType = originalObject.listType;
+          updates.listStyle = originalObject.listStyle;
+          updates.textTransform = originalObject.textTransform;
+        }
       }
 
       // Handle shape-specific properties
@@ -1054,9 +1080,63 @@ export default function JsonCanvas({
           updates.width = baseWidth * (object.scaleX || 1);
           updates.height = baseHeight * (object.scaleY || 1);
         }
+
+        // Preserve shape-specific properties that Fabric.js doesn't handle
+        if (originalObject) {
+          updates.shapeType = originalObject.shapeType;
+          updates.opacity = originalObject.opacity;
+          updates.shadow = originalObject.shadow;
+          updates.gradient = originalObject.gradient;
+        }
       }
 
+      // Update the state first
       editorState.updateObjectSilent(object.data.objectId, updates);
+
+      // Then reapply visual effects to the canvas object
+      const updatedObject = page?.objects.find(
+        (obj) => obj.id === object.data?.objectId
+      );
+      if (updatedObject) {
+        // Create a merged object that includes both the updated properties and the original preserved properties
+        const mergedObject = {
+          ...updatedObject,
+          // Only override properties that might have been lost during the update
+          ...(originalObject?.wordSpacing !== undefined && {
+            wordSpacing: originalObject.wordSpacing,
+          }),
+          ...(originalObject?.textShadow !== undefined && {
+            textShadow: originalObject.textShadow,
+          }),
+          ...(originalObject?.textBackgroundColor !== undefined && {
+            textBackgroundColor: originalObject.textBackgroundColor,
+          }),
+          ...(originalObject?.listType !== undefined && {
+            listType: originalObject.listType,
+          }),
+          ...(originalObject?.listStyle !== undefined && {
+            listStyle: originalObject.listStyle,
+          }),
+          ...(originalObject?.textTransform !== undefined && {
+            textTransform: originalObject.textTransform,
+          }),
+          ...(originalObject?.shapeType !== undefined && {
+            shapeType: originalObject.shapeType,
+          }),
+          ...(originalObject?.opacity !== undefined && {
+            opacity: originalObject.opacity,
+          }),
+          ...(originalObject?.shadow !== undefined && {
+            shadow: originalObject.shadow,
+          }),
+          ...(originalObject?.gradient !== undefined && {
+            gradient: originalObject.gradient,
+          }),
+        };
+
+        updateShapeProperties(object, mergedObject);
+        canvas.renderAll();
+      }
     });
 
     // Handle object scaling
@@ -1064,6 +1144,11 @@ export default function JsonCanvas({
       const object = e.target as FabricObjectWithData;
       if (!object?.data?.objectId) return;
 
+      // Get the original object to preserve properties that Fabric.js doesn't handle
+      const originalObject = page?.objects.find(
+        (obj) => obj.id === object.data?.objectId
+      );
+
       const updates: Partial<EditorObject> = {
         left: object.left || 0,
         top: object.top || 0,
@@ -1074,7 +1159,18 @@ export default function JsonCanvas({
 
       // Handle text-specific properties
       if (object.type === "i-text") {
-        updates.text = (object as fabric.IText).text || "";
+        let textContent = (object as fabric.IText).text || "";
+
+        // Apply word spacing to the text content if it exists in the original object
+        if (originalObject?.wordSpacing && originalObject.wordSpacing > 0) {
+          const words = textContent.split(" ");
+          const extraSpaces = " ".repeat(
+            Math.floor(originalObject.wordSpacing / 2)
+          );
+          textContent = words.join(extraSpaces);
+        }
+
+        updates.text = textContent;
         updates.fontSize = (object as fabric.IText).fontSize || 24;
         updates.fontFamily = (object as fabric.IText).fontFamily || "Arial";
         updates.fontWeight = String(
@@ -1086,8 +1182,19 @@ export default function JsonCanvas({
         updates.letterSpacing = (object as fabric.IText).charSpacing || 0;
         updates.lineHeight = (object as fabric.IText).lineHeight || 1.2;
         updates.textAlign = (object as fabric.IText).textAlign || "left";
-        // Note: wordSpacing is not supported in Fabric.js IText
-        // Note: textDecoration is not a standard property on IText, we'll handle it differently
+        updates.textDecoration = (object as fabric.IText).underline
+          ? "underline"
+          : "none";
+
+        // Preserve properties that Fabric.js doesn't handle directly
+        if (originalObject) {
+          updates.wordSpacing = originalObject.wordSpacing;
+          updates.textShadow = originalObject.textShadow;
+          updates.textBackgroundColor = originalObject.textBackgroundColor;
+          updates.listType = originalObject.listType;
+          updates.listStyle = originalObject.listStyle;
+          updates.textTransform = originalObject.textTransform;
+        }
       }
 
       // Handle shape-specific properties
@@ -1124,9 +1231,63 @@ export default function JsonCanvas({
           updates.width = baseWidth * (object.scaleX || 1);
           updates.height = baseHeight * (object.scaleY || 1);
         }
+
+        // Preserve shape-specific properties that Fabric.js doesn't handle
+        if (originalObject) {
+          updates.shapeType = originalObject.shapeType;
+          updates.opacity = originalObject.opacity;
+          updates.shadow = originalObject.shadow;
+          updates.gradient = originalObject.gradient;
+        }
       }
 
+      // Update the state first
       editorState.updateObjectSilent(object.data.objectId, updates);
+
+      // Then reapply visual effects to the canvas object
+      const updatedObject = page?.objects.find(
+        (obj) => obj.id === object.data?.objectId
+      );
+      if (updatedObject) {
+        // Create a merged object that includes both the updated properties and the original preserved properties
+        const mergedObject = {
+          ...updatedObject,
+          // Only override properties that might have been lost during the update
+          ...(originalObject?.wordSpacing !== undefined && {
+            wordSpacing: originalObject.wordSpacing,
+          }),
+          ...(originalObject?.textShadow !== undefined && {
+            textShadow: originalObject.textShadow,
+          }),
+          ...(originalObject?.textBackgroundColor !== undefined && {
+            textBackgroundColor: originalObject.textBackgroundColor,
+          }),
+          ...(originalObject?.listType !== undefined && {
+            listType: originalObject.listType,
+          }),
+          ...(originalObject?.listStyle !== undefined && {
+            listStyle: originalObject.listStyle,
+          }),
+          ...(originalObject?.textTransform !== undefined && {
+            textTransform: originalObject.textTransform,
+          }),
+          ...(originalObject?.shapeType !== undefined && {
+            shapeType: originalObject.shapeType,
+          }),
+          ...(originalObject?.opacity !== undefined && {
+            opacity: originalObject.opacity,
+          }),
+          ...(originalObject?.shadow !== undefined && {
+            shadow: originalObject.shadow,
+          }),
+          ...(originalObject?.gradient !== undefined && {
+            gradient: originalObject.gradient,
+          }),
+        };
+
+        updateShapeProperties(object, mergedObject);
+        canvas.renderAll();
+      }
     });
 
     // Handle keyboard events for bulk deletion
@@ -1165,6 +1326,11 @@ export default function JsonCanvas({
     canvas.on("text:changed", (e) => {
       const textObject = e.target as FabricObjectWithData;
       if (textObject?.data?.objectId) {
+        // Get the original object to preserve properties that Fabric.js doesn't handle
+        const originalObject = page?.objects.find(
+          (obj) => obj.id === textObject.data?.objectId
+        );
+
         const updates: Partial<EditorObject> = {
           text: (textObject as fabric.IText).text || "",
           fontSize: (textObject as fabric.IText).fontSize || 24,
@@ -1179,12 +1345,52 @@ export default function JsonCanvas({
           lineHeight: (textObject as fabric.IText).lineHeight || 1.2,
           textAlign: (textObject as fabric.IText).textAlign || "left",
         };
+
+        // Preserve properties that Fabric.js doesn't handle directly
+        if (originalObject) {
+          updates.wordSpacing = originalObject.wordSpacing;
+          updates.textShadow = originalObject.textShadow;
+          updates.textBackgroundColor = originalObject.textBackgroundColor;
+          updates.listType = originalObject.listType;
+          updates.listStyle = originalObject.listStyle;
+          updates.textTransform = originalObject.textTransform;
+        }
+
+        // Update the state first
         editorState.updateObjectSilent(textObject.data.objectId, updates);
-        console.log(
-          "Text changed, updated state:",
-          textObject.data.objectId,
-          updates
+
+        // Then reapply visual effects to the canvas object
+        const updatedObject = page?.objects.find(
+          (obj) => obj.id === textObject.data?.objectId
         );
+        if (updatedObject) {
+          // Create a merged object that includes both the updated properties and the original preserved properties
+          const mergedObject = {
+            ...updatedObject,
+            // Only override properties that might have been lost during the update
+            ...(originalObject?.wordSpacing !== undefined && {
+              wordSpacing: originalObject.wordSpacing,
+            }),
+            ...(originalObject?.textShadow !== undefined && {
+              textShadow: originalObject.textShadow,
+            }),
+            ...(originalObject?.textBackgroundColor !== undefined && {
+              textBackgroundColor: originalObject.textBackgroundColor,
+            }),
+            ...(originalObject?.listType !== undefined && {
+              listType: originalObject.listType,
+            }),
+            ...(originalObject?.listStyle !== undefined && {
+              listStyle: originalObject.listStyle,
+            }),
+            ...(originalObject?.textTransform !== undefined && {
+              textTransform: originalObject.textTransform,
+            }),
+          };
+
+          updateShapeProperties(textObject, mergedObject);
+          canvas.renderAll();
+        }
       }
     });
 
@@ -1194,6 +1400,12 @@ export default function JsonCanvas({
     return () => {
       canvas.dispose();
       document.removeEventListener("keydown", handleKeyDown);
+
+      // Clean up any pending selection timeout
+      if (selectionTimeoutRef.current) {
+        clearTimeout(selectionTimeoutRef.current);
+        selectionTimeoutRef.current = null;
+      }
     };
   }, []); // Only run once on mount
 
@@ -1223,8 +1435,6 @@ export default function JsonCanvas({
   useEffect(() => {
     const canvas = fabricCanvasRef.current;
     if (!canvas) return;
-
-    console.log("Updating canvas objects:", page.objects.length, "objects");
 
     // Helper function to get expected Fabric.js type for shape types
     const getExpectedFabricType = (shapeType: string | undefined): string => {
@@ -1264,14 +1474,11 @@ export default function JsonCanvas({
       }
     };
 
-    // Store current selection before clearing
-    const currentSelection = canvas.getActiveObject();
-    const selectedObjectId = currentSelection
-      ? (currentSelection as FabricObjectWithData).data?.objectId
-      : null;
-
-    // Get existing objects on canvas
-    const existingObjects = canvas.getObjects() as FabricObjectWithData[];
+    // Get existing objects on canvas (excluding grid and ruler lines)
+    const allObjects = canvas.getObjects() as FabricObjectWithData[];
+    const existingObjects = allObjects.filter(
+      (obj) => !obj.data?.isGridLine && !obj.data?.isRuler
+    );
     const existingObjectIds = existingObjects
       .map((obj) => obj.data?.objectId)
       .filter((id): id is string => id !== undefined);
@@ -1305,42 +1512,22 @@ export default function JsonCanvas({
       );
       if (!existingObject) return false;
 
-      // Check if the object is at the same index in the canvas
-      const canvasIndex = canvas.getObjects().indexOf(existingObject);
+      // Check if the object is at the same index in the canvas (excluding grid/ruler)
+      const canvasObjects = canvas
+        .getObjects()
+        .filter(
+          (obj) =>
+            !(obj as FabricObjectWithData).data?.isGridLine &&
+            !(obj as FabricObjectWithData).data?.isRuler
+        );
+      const canvasIndex = canvasObjects.indexOf(existingObject);
       return canvasIndex !== index;
     });
 
-    // Check if any properties have changed significantly (optimization check)
-    const objectsWithPropertyChanges = page.objects.filter((obj) => {
-      const existingObject = existingObjects.find(
-        (fabricObj) => fabricObj.data?.objectId === obj.id
-      );
-      if (!existingObject) return false;
-
-      // Simple change detection - just check if object exists and needs updates
-      return true; // Always update for performance
-    });
-
-    // If objects were added, removed, shape types changed, layer order changed, or properties changed significantly, update the canvas
-    if (
-      objectsAdded.length > 0 ||
-      objectsRemoved.length > 0 ||
-      objectsWithShapeTypeChanges.length > 0 ||
-      layerOrderChanged
-    ) {
-      console.log(
-        "Objects added/removed, shape types changed, or layer order changed, recreating canvas"
-      );
-
-      // Clear existing objects
-      canvas.clear();
-
-      // Ensure background is set correctly after clearing
-      canvas.backgroundColor = page.backgroundColor;
-
+    // If this is the first render and we have initial objects, create them once
+    if (existingObjects.length === 0 && page.objects.length > 0) {
       // Add objects from page
       page.objects.forEach((obj) => {
-        console.log("Creating object:", obj.type, obj.id);
         let fabricObject: FabricObjectWithData;
 
         switch (obj.type) {
@@ -1485,14 +1672,15 @@ export default function JsonCanvas({
               editable: true,
               cursorColor: "#00a0f5",
               cursorWidth: 2,
-              shadow: obj.textShadow
-                ? new fabric.Shadow({
-                    color: obj.textShadow.color,
-                    blur: obj.textShadow.blur,
-                    offsetX: obj.textShadow.offsetX,
-                    offsetY: obj.textShadow.offsetY,
-                  })
-                : undefined,
+              shadow:
+                obj.textShadow !== undefined
+                  ? new fabric.Shadow({
+                      color: obj.textShadow.color,
+                      blur: obj.textShadow.blur,
+                      offsetX: obj.textShadow.offsetX,
+                      offsetY: obj.textShadow.offsetY,
+                    })
+                  : undefined,
               underline: obj.textDecoration === "underline",
             });
             fabricObject.data = { objectId: obj.id };
@@ -1505,7 +1693,6 @@ export default function JsonCanvas({
 
           case "image":
             // Skip images for now to avoid TypeScript issues
-            console.log("Skipping image object:", obj.id);
             return;
 
           default:
@@ -1519,46 +1706,406 @@ export default function JsonCanvas({
           fabricObject.controls = {};
         }
         fabricObject.controls.deleteControl = deleteControl;
-
-        // No need to handle underline separately - it's now built-in
-        // The underline property is already set in the IText creation above
-
-        console.log(
-          "Added object to canvas:",
-          fabricObject,
-          "Selectable:",
-          fabricObject.selectable,
-          "HasControls:",
-          fabricObject.hasControls,
-          "Controls:",
-          fabricObject.controls
-        );
       });
 
       canvas.renderAll();
-      console.log(
-        "Canvas rendered with",
-        canvas.getObjects().length,
-        "objects"
-      );
+      return; // Exit early after creating initial objects
+    }
 
-      // Restore selection if there was one
-      if (selectedObjectId) {
-        const objectToSelect = canvas
-          .getObjects()
-          .find(
-            (obj) =>
-              (obj as FabricObjectWithData).data?.objectId === selectedObjectId
-          ) as FabricObjectWithData;
-        if (objectToSelect) {
-          canvas.setActiveObject(objectToSelect);
-          canvas.renderAll();
-          console.log("Restored selection to:", selectedObjectId);
-        }
+    // For subsequent updates, only handle additions, removals, and property changes
+    if (
+      objectsAdded.length > 0 ||
+      objectsRemoved.length > 0 ||
+      objectsWithShapeTypeChanges.length > 0 ||
+      layerOrderChanged
+    ) {
+      // Handle layer order changes first
+      if (layerOrderChanged) {
+        // Clear the canvas and re-add all objects in the correct order
+        canvas.clear();
+
+        // Re-add all objects in the new order
+        page.objects.forEach((obj) => {
+          let fabricObject: FabricObjectWithData;
+
+          switch (obj.type) {
+            case "text":
+              // Handle word spacing by adding extra spaces between words
+              let displayText = obj.text || "Double click to edit";
+              if (obj.wordSpacing && obj.wordSpacing > 0) {
+                const words = displayText.split(" ");
+                const extraSpaces = " ".repeat(Math.floor(obj.wordSpacing / 2));
+                displayText = words.join(extraSpaces);
+              }
+
+              // Handle list formatting
+              if (obj.listType && obj.listType !== "none") {
+                let formattedText = displayText;
+
+                const stripListFormatting = (text: string): string => {
+                  return text
+                    .split("\n")
+                    .map((line) => {
+                      line = line.replace(/^[•○■]\s/, "");
+                      line = line.replace(/^[a-zA-Z0-9]+\.\s/, "");
+                      return line.trim();
+                    })
+                    .join("\n");
+                };
+
+                const applyListFormatting = (
+                  text: string,
+                  listType: string,
+                  listStyle?: string
+                ): string => {
+                  const lines = text.split("\n");
+
+                  if (listType === "bullet") {
+                    const bulletChar =
+                      listStyle === "circle"
+                        ? "○"
+                        : listStyle === "square"
+                        ? "■"
+                        : "•";
+                    return lines
+                      .map((line) =>
+                        line.trim() ? `${bulletChar} ${line.trim()}` : line
+                      )
+                      .join("\n");
+                  } else if (listType === "number") {
+                    let counter = 1;
+                    return lines
+                      .map((line) => {
+                        if (line.trim()) {
+                          let prefix = "";
+                          if (listStyle === "lower-alpha") {
+                            prefix = `${String.fromCharCode(96 + counter)}. `;
+                          } else if (listStyle === "upper-alpha") {
+                            prefix = `${String.fromCharCode(64 + counter)}. `;
+                          } else if (listStyle === "lower-roman") {
+                            prefix = `${toRoman(counter).toLowerCase()}. `;
+                          } else if (listStyle === "upper-roman") {
+                            prefix = `${toRoman(counter)}. `;
+                          } else {
+                            prefix = `${counter}. `;
+                          }
+                          counter++;
+                          return `${prefix}${line.trim()}`;
+                        }
+                        return line;
+                      })
+                      .join("\n");
+                  }
+                  return text;
+                };
+
+                formattedText = stripListFormatting(formattedText);
+                formattedText = applyListFormatting(
+                  formattedText,
+                  obj.listType,
+                  obj.listStyle
+                );
+
+                displayText = formattedText;
+              } else {
+                let formattedText = displayText;
+
+                const stripListFormatting = (text: string): string => {
+                  return text
+                    .split("\n")
+                    .map((line) => {
+                      line = line.replace(/^[•○■]\s/, "");
+                      line = line.replace(/^[a-zA-Z0-9]+\.\s/, "");
+                      return line.trim();
+                    })
+                    .join("\n");
+                };
+
+                formattedText = stripListFormatting(formattedText);
+                displayText = formattedText;
+              }
+
+              fabricObject = new fabric.IText(displayText, {
+                left: obj.left,
+                top: obj.top,
+                fontSize: obj.fontSize || 24,
+                fontFamily: obj.fontFamily || "Arial",
+                fontWeight: obj.fontWeight || "normal",
+                fontStyle: obj.fontStyle || "normal",
+                fill: obj.fill || "#000000",
+                backgroundColor: obj.textBackgroundColor,
+                charSpacing: obj.letterSpacing || 0,
+                lineHeight: obj.lineHeight || 1.2,
+                textAlign: obj.textAlign || "left",
+                opacity: obj.opacity !== undefined ? obj.opacity : 1,
+                scaleX: obj.scaleX || 1,
+                scaleY: obj.scaleY || 1,
+                angle: obj.angle || 0,
+                selectable: true,
+                evented: true,
+                hasControls: true,
+                hasBorders: true,
+                lockMovementX: false,
+                lockMovementY: false,
+                lockRotation: false,
+                lockScalingX: false,
+                lockScalingY: false,
+                transparentCorners: false,
+                cornerColor: "#00a0f5",
+                cornerStrokeColor: "#0066cc",
+                cornerSize: 10,
+                cornerStyle: "circle",
+                borderColor: "#00a0f5",
+                borderScaleFactor: 2,
+                editable: true,
+                cursorColor: "#00a0f5",
+                cursorWidth: 2,
+                shadow:
+                  obj.textShadow !== undefined
+                    ? new fabric.Shadow({
+                        color: obj.textShadow.color,
+                        blur: obj.textShadow.blur,
+                        offsetX: obj.textShadow.offsetX,
+                        offsetY: obj.textShadow.offsetY,
+                      })
+                    : undefined,
+                underline: obj.textDecoration === "underline",
+              });
+              fabricObject.data = { objectId: obj.id };
+              break;
+
+            case "shape":
+              fabricObject = createShapeObject(obj);
+              fabricObject.data = { objectId: obj.id };
+              break;
+
+            case "image":
+              return;
+
+            default:
+              return;
+          }
+
+          canvas.add(fabricObject);
+
+          if (!fabricObject.controls) {
+            fabricObject.controls = {};
+          }
+          fabricObject.controls.deleteControl = deleteControl;
+        });
+
+        canvas.renderAll();
+        updateGridAndRuler(); // Add this line
+        return; // Exit early after reordering
       }
-    } else if (objectsWithPropertyChanges.length > 0) {
+
+      // Handle removals first
+      objectsRemoved.forEach((objectId) => {
+        const objectToRemove = existingObjects.find(
+          (obj) => obj.data?.objectId === objectId
+        );
+        if (objectToRemove) {
+          canvas.remove(objectToRemove);
+        }
+      });
+
+      // Handle shape type changes
+      objectsWithShapeTypeChanges.forEach((obj) => {
+        const objectToRemove = existingObjects.find(
+          (fabricObj) => fabricObj.data?.objectId === obj.id
+        );
+        if (objectToRemove) {
+          canvas.remove(objectToRemove);
+        }
+
+        // Create new shape object with updated shape type
+        const newShapeObject = createShapeObject(obj);
+        newShapeObject.data = { objectId: obj.id };
+        canvas.add(newShapeObject);
+
+        if (!newShapeObject.controls) {
+          newShapeObject.controls = {};
+        }
+        newShapeObject.controls.deleteControl = deleteControl;
+      });
+
+      // Handle additions
+      objectsAdded.forEach((objectId) => {
+        const obj = page.objects.find((o) => o.id === objectId);
+        if (!obj) return;
+
+        let fabricObject: FabricObjectWithData;
+
+        switch (obj.type) {
+          case "text":
+            // Handle word spacing by adding extra spaces between words
+            let displayText = obj.text || "Double click to edit";
+            if (obj.wordSpacing && obj.wordSpacing > 0) {
+              const words = displayText.split(" ");
+              const extraSpaces = " ".repeat(Math.floor(obj.wordSpacing / 2));
+              displayText = words.join(extraSpaces);
+            }
+
+            // Handle list formatting
+            if (obj.listType && obj.listType !== "none") {
+              let formattedText = displayText;
+
+              const stripListFormatting = (text: string): string => {
+                return text
+                  .split("\n")
+                  .map((line) => {
+                    line = line.replace(/^[•○■]\s/, "");
+                    line = line.replace(/^[a-zA-Z0-9]+\.\s/, "");
+                    return line.trim();
+                  })
+                  .join("\n");
+              };
+
+              const applyListFormatting = (
+                text: string,
+                listType: string,
+                listStyle?: string
+              ): string => {
+                const lines = text.split("\n");
+
+                if (listType === "bullet") {
+                  const bulletChar =
+                    listStyle === "circle"
+                      ? "○"
+                      : listStyle === "square"
+                      ? "■"
+                      : "•";
+                  return lines
+                    .map((line) =>
+                      line.trim() ? `${bulletChar} ${line.trim()}` : line
+                    )
+                    .join("\n");
+                } else if (listType === "number") {
+                  let counter = 1;
+                  return lines
+                    .map((line) => {
+                      if (line.trim()) {
+                        let prefix = "";
+                        if (listStyle === "lower-alpha") {
+                          prefix = `${String.fromCharCode(96 + counter)}. `;
+                        } else if (listStyle === "upper-alpha") {
+                          prefix = `${String.fromCharCode(64 + counter)}. `;
+                        } else if (listStyle === "lower-roman") {
+                          prefix = `${toRoman(counter).toLowerCase()}. `;
+                        } else if (listStyle === "upper-roman") {
+                          prefix = `${toRoman(counter)}. `;
+                        } else {
+                          prefix = `${counter}. `;
+                        }
+                        counter++;
+                        return `${prefix}${line.trim()}`;
+                      }
+                      return line;
+                    })
+                    .join("\n");
+                }
+                return text;
+              };
+
+              formattedText = stripListFormatting(formattedText);
+              formattedText = applyListFormatting(
+                formattedText,
+                obj.listType,
+                obj.listStyle
+              );
+
+              displayText = formattedText;
+            } else {
+              let formattedText = displayText;
+
+              const stripListFormatting = (text: string): string => {
+                return text
+                  .split("\n")
+                  .map((line) => {
+                    line = line.replace(/^[•○■]\s/, "");
+                    line = line.replace(/^[a-zA-Z0-9]+\.\s/, "");
+                    return line.trim();
+                  })
+                  .join("\n");
+              };
+
+              formattedText = stripListFormatting(formattedText);
+              displayText = formattedText;
+            }
+
+            fabricObject = new fabric.IText(displayText, {
+              left: obj.left,
+              top: obj.top,
+              fontSize: obj.fontSize || 24,
+              fontFamily: obj.fontFamily || "Arial",
+              fontWeight: obj.fontWeight || "normal",
+              fontStyle: obj.fontStyle || "normal",
+              fill: obj.fill || "#000000",
+              backgroundColor: obj.textBackgroundColor,
+              charSpacing: obj.letterSpacing || 0,
+              lineHeight: obj.lineHeight || 1.2,
+              textAlign: obj.textAlign || "left",
+              opacity: obj.opacity !== undefined ? obj.opacity : 1,
+              scaleX: obj.scaleX || 1,
+              scaleY: obj.scaleY || 1,
+              angle: obj.angle || 0,
+              selectable: true,
+              evented: true,
+              hasControls: true,
+              hasBorders: true,
+              lockMovementX: false,
+              lockMovementY: false,
+              lockRotation: false,
+              lockScalingX: false,
+              lockScalingY: false,
+              transparentCorners: false,
+              cornerColor: "#00a0f5",
+              cornerStrokeColor: "#0066cc",
+              cornerSize: 10,
+              cornerStyle: "circle",
+              borderColor: "#00a0f5",
+              borderScaleFactor: 2,
+              editable: true,
+              cursorColor: "#00a0f5",
+              cursorWidth: 2,
+              shadow:
+                obj.textShadow !== undefined
+                  ? new fabric.Shadow({
+                      color: obj.textShadow.color,
+                      blur: obj.textShadow.blur,
+                      offsetX: obj.textShadow.offsetX,
+                      offsetY: obj.textShadow.offsetY,
+                    })
+                  : undefined,
+              underline: obj.textDecoration === "underline",
+            });
+            fabricObject.data = { objectId: obj.id };
+            break;
+
+          case "shape":
+            fabricObject = createShapeObject(obj);
+            fabricObject.data = { objectId: obj.id };
+            break;
+
+          case "image":
+            return;
+
+          default:
+            return;
+        }
+
+        canvas.add(fabricObject);
+
+        if (!fabricObject.controls) {
+          fabricObject.controls = {};
+        }
+        fabricObject.controls.deleteControl = deleteControl;
+      });
+
+      canvas.renderAll();
+    } else {
       // Just update existing objects with new properties (optimized updates)
-      objectsWithPropertyChanges.forEach((obj) => {
+      page.objects.forEach((obj) => {
         const fabricObject = existingObjects.find(
           (fabricObj) => fabricObj.data?.objectId === obj.id
         );
@@ -1577,58 +2124,10 @@ export default function JsonCanvas({
     const canvas = fabricCanvasRef.current;
     if (!canvas) return;
 
-    // Update event handlers with new callback
-    canvas.off("selection:created");
-    canvas.off("selection:updated");
-    canvas.off("selection:cleared");
-
-    canvas.on("selection:created", (e) => {
-      console.log("Selection created:", e);
-
-      // Check if this is a group selection (multiple objects)
-      if (e.selected && e.selected.length > 1) {
-        // For group selections, we don't set a specific object as selected
-        console.log(
-          "Group selection created with",
-          e.selected.length,
-          "objects"
-        );
-        onObjectSelect(null); // Clear individual selection
-      } else {
-        // Single object selection
-        const activeObject = e.selected?.[0] as FabricObjectWithData;
-        if (activeObject?.data?.objectId) {
-          onObjectSelect(activeObject.data.objectId);
-        }
-      }
-    });
-
-    canvas.on("selection:updated", (e) => {
-      console.log("Selection updated:", e);
-
-      // Check if this is a group selection (multiple objects)
-      if (e.selected && e.selected.length > 1) {
-        // For group selections, we don't set a specific object as selected
-        console.log(
-          "Group selection updated with",
-          e.selected.length,
-          "objects"
-        );
-        onObjectSelect(null); // Clear individual selection
-      } else {
-        // Single object selection
-        const activeObject = e.selected?.[0] as FabricObjectWithData;
-        if (activeObject?.data?.objectId) {
-          onObjectSelect(activeObject.data.objectId);
-        }
-      }
-    });
-
-    canvas.on("selection:cleared", () => {
-      console.log("Selection cleared");
-      onObjectSelect(null);
-    });
-  }, [onObjectSelect]);
+    // No need to re-setup event handlers since they're already set up in the initial useEffect
+    // The callbacks (onObjectSelect, onMultiSelect) are passed as closures to the handlers
+    // so they will automatically use the latest values
+  }, [onObjectSelect, onMultiSelect]);
 
   // Handle grid and ruler visibility changes
   useEffect(() => {
