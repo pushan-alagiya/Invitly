@@ -24,12 +24,14 @@ import {
   ChevronRight,
   GripVertical,
   Edit3,
+  Star,
 } from "lucide-react";
 import { editorState, EditorObject } from "@/lib/editor-state";
 import JsonCanvas from "@/components/editor/JsonCanvas";
 import ElementsTab from "@/components/editor/sidebar/ElementsTab";
 import ImagesTab from "@/components/editor/sidebar/ImagesTab";
 import BackgroundsTab from "@/components/editor/sidebar/BackgroundsTab";
+import IconsTab from "@/components/editor/sidebar/IconsTab";
 import PropertiesPanel from "@/components/editor/sidebar/PropertiesPanel";
 import LayersPanel from "@/components/editor/sidebar/LayersPanel";
 import { Separator } from "@/components/ui/separator";
@@ -64,7 +66,6 @@ export default function TemplateCreator() {
   const [showGrid, setShowGrid] = useState(false);
   const [showRuler, setShowRuler] = useState(false);
   const [zoomLevel, setZoomLevel] = useState(1);
-  const [clipboard, setClipboard] = useState<EditorObject[] | null>(null);
   const [pageOffset, setPageOffset] = useState(0);
   const [draggedPageId, setDraggedPageId] = useState<string | null>(null);
   const [dragOverPageId, setDragOverPageId] = useState<string | null>(null);
@@ -515,6 +516,7 @@ export default function TemplateCreator() {
   // Object actions
   const handleObjectSelect = (objectId: string | null) => {
     setSelectedObjectId(objectId);
+    setSelectedObjectIds([]); // Clear multi-selection when single object is selected
     editorState.selectObject(objectId);
   };
 
@@ -565,7 +567,25 @@ export default function TemplateCreator() {
   };
 
   const copyObject = () => {
-    if (selectedObjectIds.length > 0) {
+    console.log(
+      "Copy triggered. Selected objects:",
+      selectedObjectIds.length,
+      "Selected object:",
+      selectedObjectId
+    );
+
+    // Prioritize single object selection over multi-selection
+    if (selectedObject) {
+      // Copy single object
+      const copiedObject: EditorObject = {
+        ...selectedObject,
+        id: `copied-${Date.now()}`,
+        left: selectedObject.left + 20,
+        top: selectedObject.top + 20,
+      };
+      editorState.setClipboard([copiedObject]);
+      console.log("Copied single object:", copiedObject.type);
+    } else if (selectedObjectIds.length > 0) {
       // Copy multiple objects
       const copiedObjects = selectedObjectIds
         .map((id, index) => {
@@ -582,49 +602,26 @@ export default function TemplateCreator() {
         })
         .filter(Boolean) as EditorObject[];
 
-      setClipboard(copiedObjects);
-    } else if (selectedObject) {
-      // Copy single object
-      const copiedObject: EditorObject = {
-        ...selectedObject,
-        id: `copied-${Date.now()}`,
-        left: selectedObject.left + 20,
-        top: selectedObject.top + 20,
-        // Ensure all shape properties are preserved
-        shapeType: selectedObject.shapeType,
-        cornerRadius: selectedObject.cornerRadius,
-        strokeWidth: selectedObject.strokeWidth,
-        stroke: selectedObject.stroke,
-        fill: selectedObject.fill,
-        opacity: selectedObject.opacity,
-        angle: selectedObject.angle,
-        scaleX: selectedObject.scaleX,
-        scaleY: selectedObject.scaleY,
-        width: selectedObject.width,
-        height: selectedObject.height,
-        // Preserve text properties
-        text: selectedObject.text,
-        fontSize: selectedObject.fontSize,
-        fontFamily: selectedObject.fontFamily,
-        fontWeight: selectedObject.fontWeight,
-        fontStyle: selectedObject.fontStyle,
-        textDecoration: selectedObject.textDecoration,
-        textAlign: selectedObject.textAlign,
-        textBackgroundColor: selectedObject.textBackgroundColor,
-        letterSpacing: selectedObject.letterSpacing,
-        lineHeight: selectedObject.lineHeight,
-        wordSpacing: selectedObject.wordSpacing,
-        textShadow: selectedObject.textShadow,
-        listType: selectedObject.listType,
-        listStyle: selectedObject.listStyle,
-      };
-      setClipboard([copiedObject]);
+      if (copiedObjects.length > 0) {
+        editorState.setClipboard(copiedObjects);
+        console.log(
+          `Copied ${copiedObjects.length} objects:`,
+          copiedObjects.map((obj) => obj.type)
+        );
+      }
+    } else {
+      // Clear clipboard if nothing is selected
+      editorState.clearClipboard();
+      console.log("No objects selected, cleared clipboard");
     }
   };
 
   const pasteObject = () => {
-    if (clipboard && currentPage) {
+    const clipboard = editorState.getClipboard();
+    if (clipboard && clipboard.length > 0 && currentPage) {
       const timestamp = Date.now();
+      const pastedObjects: EditorObject[] = [];
+
       // Paste multiple objects
       clipboard.forEach((obj, index) => {
         const pastedObject: EditorObject = {
@@ -633,8 +630,24 @@ export default function TemplateCreator() {
           left: obj.left + index * 10,
           top: obj.top + index * 10,
         };
+        pastedObjects.push(pastedObject);
         editorState.addObject(pastedObject);
       });
+
+      console.log(`Pasted ${pastedObjects.length} objects`);
+
+      // Select the pasted objects
+      if (pastedObjects.length === 1) {
+        setSelectedObjectId(pastedObjects[0].id);
+        editorState.selectObject(pastedObjects[0].id);
+        setSelectedObjectIds([]);
+      } else {
+        setSelectedObjectIds(pastedObjects.map((obj) => obj.id));
+        setSelectedObjectId(null);
+        editorState.selectObject(null);
+      }
+    } else {
+      console.log("No clipboard content to paste");
     }
   };
 
@@ -642,6 +655,41 @@ export default function TemplateCreator() {
     try {
       const text = await navigator.clipboard.readText();
       if (text && currentPage) {
+        // Check if the text looks like code (contains common code patterns)
+        const isCode =
+          /^(function|const|let|var|import|export|class|if|for|while|switch|case|return|console\.|document\.|window\.|<script|<html|<body|<div|<span|<p>)/i.test(
+            text.trim()
+          ) ||
+          /[{}();=><]/.test(text) ||
+          text.includes("function") ||
+          text.includes("const ") ||
+          text.includes("let ") ||
+          text.includes("var ") ||
+          text.includes("import ") ||
+          text.includes("export ") ||
+          text.includes("class ") ||
+          text.includes("if (") ||
+          text.includes("for (") ||
+          text.includes("while (") ||
+          text.includes("switch (") ||
+          text.includes("case ") ||
+          text.includes("return ") ||
+          text.includes("console.") ||
+          text.includes("document.") ||
+          text.includes("window.") ||
+          text.includes("<script") ||
+          text.includes("<html") ||
+          text.includes("<body") ||
+          text.includes("<div") ||
+          text.includes("<span") ||
+          text.includes("<p>");
+
+        // If it looks like code, don't paste it
+        if (isCode) {
+          console.log("Detected code in clipboard, skipping paste");
+          return;
+        }
+
         // Create a new text object with the pasted content
         const newText: EditorObject = {
           id: `text-${Date.now()}`,
@@ -656,6 +704,7 @@ export default function TemplateCreator() {
           height: 30,
         };
         editorState.addObject(newText);
+        console.log("Pasted text object");
       }
     } catch (error) {
       console.log("Could not read clipboard text:", error);
@@ -663,12 +712,22 @@ export default function TemplateCreator() {
   };
 
   const handlePaste = () => {
+    const clipboard = editorState.getClipboard();
+    console.log(
+      "Paste triggered. Clipboard:",
+      clipboard ? `${clipboard.length} objects` : "empty"
+    );
+
     if (clipboard && clipboard.length > 0) {
       // If we have copied objects, paste them
       pasteObject();
     } else {
-      // Otherwise try to paste text from clipboard
-      pasteText();
+      // Only try to paste text if no objects are selected (to avoid accidental text pasting)
+      if (!selectedObjectId && !selectedObjectIds.length) {
+        pasteText();
+      } else {
+        console.log("Objects selected, skipping text paste");
+      }
     }
   };
 
@@ -749,21 +808,39 @@ export default function TemplateCreator() {
 
   const selectStockImage = (imageUrl: string) => {
     // Handle stock image selection
-    console.log("Stock image selected:", imageUrl);
+    console.log("Selected stock image:", imageUrl);
+  };
+
+  const handleIconSelect = (iconData: {
+    name: string;
+    svg: string;
+    prefix: string;
+  }) => {
+    // Use the new addIcon method from editor state
+    editorState.addIcon(iconData);
   };
 
   // Form handling
   const updateObjectField = (field: string, value: string | number) => {
     if (!selectedObjectId) return;
-    editorState.updateObjectSilent(selectedObjectId, { [field]: value });
+
+    // Get the current object to ensure we have all properties
+    const currentObject = editorState.getObject(selectedObjectId);
+    if (!currentObject) return;
+
+    // Update the object with the new field value
+    const updatedObject = { ...currentObject, [field]: value };
+
+    // Use updateObject instead of updateObjectSilent to ensure changes are saved
+    editorState.updateObject(selectedObjectId, updatedObject);
+
+    // Force a re-render by updating the project state
+    setProject(editorState.getProject());
   };
 
   const handleFieldBlur = () => {
-    if (!selectedObjectId) return;
-    const object = editorState.getObject(selectedObjectId);
-    if (object) {
-      editorState.updateObject(selectedObjectId, object);
-    }
+    // This function is no longer needed since we're using updateObject directly
+    // But keeping it for backward compatibility
   };
 
   // Layer actions for specific objects
@@ -821,7 +898,7 @@ export default function TemplateCreator() {
           onValueChange={setActiveTab}
           className="flex-1 flex flex-col min-h-0"
         >
-          <TabsList className="grid w-full grid-cols-3 h-fit gap-2 p-2 flex-shrink-0">
+          <TabsList className="grid w-full grid-cols-4 h-fit gap-2 p-2 flex-shrink-0">
             <TabsTrigger
               value="elements"
               className="flex items-center justify-center gap-2 text-sm font-medium px-3 py-2 data-[state=active]:bg-white data-[state=active]:shadow-sm rounded-md transition-all"
@@ -842,6 +919,13 @@ export default function TemplateCreator() {
             >
               <Palette className="w-4 h-4" />
               <span>Backgrounds</span>
+            </TabsTrigger>
+            <TabsTrigger
+              value="icons"
+              className="flex items-center justify-center gap-2 text-sm font-medium px-3 py-2 data-[state=active]:bg-white data-[state=active]:shadow-sm rounded-md transition-all"
+            >
+              <Star className="w-4 h-4" />
+              <span>Icons</span>
             </TabsTrigger>
           </TabsList>
 
@@ -871,6 +955,10 @@ export default function TemplateCreator() {
                 onBackgroundColorChange={changeBackgroundColor}
                 onBackgroundPatternSelect={selectBackgroundPattern}
               />
+            </TabsContent>
+
+            <TabsContent value="icons" className="mt-0 h-full">
+              <IconsTab onIconSelect={handleIconSelect} />
             </TabsContent>
           </div>
         </Tabs>

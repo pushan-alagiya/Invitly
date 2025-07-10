@@ -22,6 +22,7 @@ import {
   Minus,
   Plus,
   ListOrdered,
+  Star,
 } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 
@@ -176,11 +177,15 @@ export default function PropertiesPanel({
         <h3 className="font-semibold text-gray-800 text-sm">
           {selectedObject.type === "text"
             ? "Text Properties"
+            : selectedObject.type === "icon"
+            ? "Icon Properties"
             : "Shape Properties"}
         </h3>
         <p className="text-xs text-gray-500 mt-1">
           {selectedObject.type === "text"
             ? "Customize your text appearance"
+            : selectedObject.type === "icon"
+            ? "Adjust icon settings"
             : "Adjust shape settings"}
         </p>
       </div>
@@ -1013,6 +1018,66 @@ export default function PropertiesPanel({
                       unit="px"
                     />
                   )}
+                </div>
+              </div>
+            </>
+          )}
+
+          {/* Icon Properties */}
+          {selectedObject.type === "icon" && (
+            <>
+              <div>
+                <SectionHeader icon={Star} title="Icon Info" />
+                <div className="space-y-3">
+                  <div>
+                    <Label className="text-xs font-medium text-gray-700 mb-1 block">
+                      Icon Name
+                    </Label>
+                    <div className="p-2 bg-gray-50 rounded-md text-xs text-gray-600">
+                      {selectedObject.iconName || "Unknown"}
+                    </div>
+                  </div>
+                  <div>
+                    <Label className="text-xs font-medium text-gray-700 mb-1 block">
+                      Icon Set
+                    </Label>
+                    <div className="p-2 bg-gray-50 rounded-md text-xs text-gray-600">
+                      {selectedObject.iconPrefix || "Unknown"}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <Separator />
+
+              <div>
+                <SectionHeader icon={Palette} title="Colors" />
+                <div className="space-y-3">
+                  <ColorPicker
+                    label="Icon Color"
+                    value={selectedObject.fill || "#000000"}
+                    onChange={(value) => onUpdateObjectField("fill", value)}
+                    onBlur={onFieldBlur}
+                    id="fill"
+                  />
+                </div>
+              </div>
+
+              <Separator />
+
+              <div>
+                <SectionHeader icon={Eye} title="Appearance" />
+                <div className="space-y-3">
+                  <RangeSlider
+                    label="Opacity"
+                    value={selectedObject.opacity || 1}
+                    onChange={(value) => onUpdateObjectField("opacity", value)}
+                    onBlur={onFieldBlur}
+                    min={0}
+                    max={1}
+                    step={0.1}
+                    unit="%"
+                  />
                 </div>
               </div>
             </>

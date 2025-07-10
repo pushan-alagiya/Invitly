@@ -2,7 +2,7 @@ import { getShapeConfig } from "./shapes-config";
 
 export interface EditorObject {
   id: string;
-  type: "text" | "shape" | "image";
+  type: "text" | "shape" | "image" | "icon";
   left: number;
   top: number;
   width?: number;
@@ -33,6 +33,9 @@ export interface EditorObject {
   shapeType?: string;
   cornerRadius?: number; // For rounded corners
   imageUrl?: string;
+  iconSvg?: string; // For storing icon SVG data
+  iconName?: string; // For storing icon name
+  iconPrefix?: string; // For storing icon prefix
   shadow?: {
     color: string;
     blur: number;
@@ -77,10 +80,24 @@ export class EditorState {
   private history: EditorProject[] = [];
   private historyIndex: number = -1;
   private maxHistorySize: number = 50;
+  private clipboard: EditorObject[] | null = null;
 
   constructor() {
     this.project = this.createDefaultProject();
     this.saveToHistory();
+  }
+
+  // Clipboard methods
+  setClipboard(objects: EditorObject[] | null) {
+    this.clipboard = objects;
+  }
+
+  getClipboard(): EditorObject[] | null {
+    return this.clipboard;
+  }
+
+  clearClipboard() {
+    this.clipboard = null;
   }
 
   private createDefaultProject(): EditorProject {
@@ -561,6 +578,23 @@ export class EditorState {
       cornerRadius: shapeConfig?.defaultCornerRadius || 0,
     };
     this.addObject(newShape);
+  }
+
+  // Add icon object
+  addIcon(iconData: { name: string; svg: string; prefix: string }) {
+    const newIcon: EditorObject = {
+      id: `icon-${Date.now()}`,
+      type: "icon",
+      left: 100,
+      top: 100,
+      width: 48, // Larger default size for better visibility
+      height: 48, // Larger default size for better visibility
+      fill: "#000000",
+      iconSvg: iconData.svg,
+      iconName: iconData.name,
+      iconPrefix: iconData.prefix,
+    };
+    this.addObject(newIcon);
   }
 }
 
