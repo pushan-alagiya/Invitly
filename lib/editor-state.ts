@@ -582,6 +582,7 @@ export class EditorState {
 
   // Add icon object
   addIcon(iconData: { name: string; svg: string; prefix: string }) {
+    console.log("Adding icon to editor state:", iconData);
     const newIcon: EditorObject = {
       id: `icon-${Date.now()}`,
       type: "icon",
@@ -594,7 +595,20 @@ export class EditorState {
       iconName: iconData.name,
       iconPrefix: iconData.prefix,
     };
+    console.log("Created icon object:", newIcon);
     this.addObject(newIcon);
+  }
+
+  // Add image object
+  addImage(imageUrl: string) {
+    const newImage: EditorObject = {
+      id: `image-${Date.now()}`,
+      type: "image",
+      left: 100,
+      top: 100,
+      imageUrl: imageUrl,
+    };
+    this.addObject(newImage);
   }
 }
 

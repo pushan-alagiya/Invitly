@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
@@ -26,7 +26,7 @@ import {
   Edit3,
   Star,
 } from "lucide-react";
-import { editorState, EditorObject } from "@/lib/editor-state";
+import { editorState, EditorObject, EditorProject } from "@/lib/editor-state";
 import JsonCanvas from "@/components/editor/JsonCanvas";
 import ElementsTab from "@/components/editor/sidebar/ElementsTab";
 import ImagesTab from "@/components/editor/sidebar/ImagesTab";
@@ -53,6 +53,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { imagekitService } from "@/lib/imagekit-service";
 
 export default function TemplateCreator() {
   const [project, setProject] = useState(editorState.getProject());
@@ -91,14 +92,35 @@ export default function TemplateCreator() {
     setPageOffset(Math.min(maxOffset, pageOffset + 1));
   };
 
-  // Subscribe to state changes
+  // Subscribe to state changes - optimized to prevent unnecessary re-renders
   useEffect(() => {
-    const unsubscribe = editorState.subscribe((updatedProject) => {
-      setProject(updatedProject);
-      setSelectedPageId(updatedProject.selectedPageId);
-      setSelectedObjectId(updatedProject.selectedObjectId);
-    });
+    const handleProjectUpdate = (updatedProject: EditorProject) => {
+      setProject((prevProject) => {
+        // Only update if the project actually changed
+        if (JSON.stringify(prevProject) !== JSON.stringify(updatedProject)) {
+          return updatedProject;
+        }
+        return prevProject;
+      });
 
+      // Only update selected page if it changed
+      setSelectedPageId((prev) => {
+        if (prev !== updatedProject.selectedPageId) {
+          return updatedProject.selectedPageId;
+        }
+        return prev;
+      });
+
+      // Only update selected object if it changed
+      setSelectedObjectId((prev) => {
+        if (prev !== updatedProject.selectedObjectId) {
+          return updatedProject.selectedObjectId;
+        }
+        return prev;
+      });
+    };
+
+    const unsubscribe = editorState.subscribe(handleProjectUpdate);
     return unsubscribe;
   }, []);
 
@@ -535,7 +557,7 @@ export default function TemplateCreator() {
     }
   };
 
-  const addText = () => {
+  const addText = useCallback(() => {
     const newText: EditorObject = {
       id: `text-${Date.now()}`,
       type: "text",
@@ -549,11 +571,11 @@ export default function TemplateCreator() {
       height: 30,
     };
     editorState.addObject(newText);
-  };
+  }, []);
 
-  const addShape = (shapeType: string) => {
+  const addShape = useCallback((shapeType: string) => {
     editorState.addShape(shapeType);
-  };
+  }, []);
 
   const duplicateObject = () => {
     if (selectedObjectIds.length > 0) {
@@ -762,15 +784,15 @@ export default function TemplateCreator() {
   };
 
   // Project actions
-  const saveProject = () => {
+  const saveProject = useCallback(() => {
     editorState.saveToLocalStorage();
-  };
+  }, []);
 
-  const loadProject = () => {
+  const loadProject = useCallback(() => {
     editorState.loadFromLocalStorage();
-  };
+  }, []);
 
-  const exportProject = () => {
+  const exportProject = useCallback(() => {
     const json = editorState.exportProject();
     const blob = new Blob([json], { type: "application/json" });
     const url = URL.createObjectURL(blob);
@@ -779,46 +801,51 @@ export default function TemplateCreator() {
     a.download = "wedding-invitation.json";
     a.click();
     URL.revokeObjectURL(url);
-  };
+  }, []);
 
-  const importProject = (file: File) => {
+  const importProject = useCallback((file: File) => {
     const reader = new FileReader();
     reader.onload = (e) => {
       const content = e.target?.result as string;
       editorState.importProject(content);
     };
     reader.readAsText(file);
-  };
+  }, []);
 
   // Background actions
-  const changeBackgroundColor = (color: string) => {
+  const changeBackgroundColor = useCallback((color: string) => {
     editorState.updateBackgroundColor(color);
-  };
-
-  const selectBackgroundPattern = (patternId: string) => {
-    // Handle background pattern selection
-    console.log("Background pattern selected:", patternId);
-  };
+  }, []);
 
   // Image actions
-  const handleImageUpload = (file: File) => {
-    // Handle image upload
-    console.log("Image uploaded:", file);
-  };
+  const handleImageUpload = useCallback(async (file: File) => {
+    try {
+      console.log("Uploading image to ImageKit:", file.name);
+      const imageKitUrl = await imagekitService.uploadImage(file);
+      console.log("Image uploaded to ImageKit:", imageKitUrl);
 
-  const selectStockImage = (imageUrl: string) => {
-    // Handle stock image selection
-    console.log("Selected stock image:", imageUrl);
-  };
+      // Add the uploaded image to the canvas
+      editorState.addImage(imageKitUrl);
+    } catch (error) {
+      console.error("Error uploading image:", error);
+      // Fallback: add image directly without ImageKit upload
+      const dataUrl = URL.createObjectURL(file);
+      editorState.addImage(dataUrl);
+    }
+  }, []);
 
-  const handleIconSelect = (iconData: {
-    name: string;
-    svg: string;
-    prefix: string;
-  }) => {
-    // Use the new addIcon method from editor state
-    editorState.addIcon(iconData);
-  };
+  const selectStockImage = useCallback((imageUrl: string) => {
+    // Add the selected image to the canvas
+    editorState.addImage(imageUrl);
+  }, []);
+
+  const handleIconSelect = useCallback(
+    (iconData: { name: string; svg: string; prefix: string }) => {
+      // Use the new addIcon method from editor state
+      editorState.addIcon(iconData);
+    },
+    []
+  );
 
   // Form handling
   const updateObjectField = (field: string, value: string | number) => {
@@ -878,16 +905,65 @@ export default function TemplateCreator() {
     });
   };
 
+  // Memoize sidebar components to prevent unnecessary re-renders
+  const memoizedElementsTab = useMemo(
+    () => (
+      <ElementsTab
+        selectedObject={selectedObject}
+        onAddText={addText}
+        onAddShape={addShape}
+        onSave={saveProject}
+        onLoad={loadProject}
+        onExport={exportProject}
+        onImport={importProject}
+      />
+    ),
+    [
+      selectedObject,
+      addText,
+      addShape,
+      saveProject,
+      loadProject,
+      exportProject,
+      importProject,
+    ]
+  );
+
+  const memoizedImagesTab = useMemo(
+    () => (
+      <ImagesTab
+        onImageUpload={handleImageUpload}
+        onStockImageSelect={selectStockImage}
+      />
+    ),
+    [handleImageUpload, selectStockImage]
+  );
+
+  const memoizedBackgroundsTab = useMemo(
+    () => (
+      <BackgroundsTab
+        backgroundColor={currentPage?.backgroundColor || "#ffffff"}
+        onBackgroundColorChange={changeBackgroundColor}
+      />
+    ),
+    [currentPage?.backgroundColor, changeBackgroundColor]
+  );
+
+  const memoizedIconsTab = useMemo(
+    () => <IconsTab onIconSelect={handleIconSelect} />,
+    [handleIconSelect]
+  );
+
   return (
     <div className="flex h-screen bg-gray-50">
       {/* Left Sidebar - Tools */}
       <div className="w-64 lg:w-80 bg-white border-r border-gray-200 flex flex-col max-h-screen">
         {/* Header */}
-        <div className="p-3 lg:p-4 border-b border-gray-200 flex-shrink-0 text-center">
-          <h1 className="text-lg lg:text-xl font-bold text-gray-800 truncate ">
+        <div className="p-4 lg:p-6 border-b border-gray-200 flex-shrink-0 text-center">
+          <h1 className="text-lg lg:text-xl font-bold text-gray-800 truncate">
             Invitation Editor
           </h1>
-          <p className="text-xs lg:text-sm text-gray-600 hidden sm:block">
+          <p className="text-xs lg:text-sm text-gray-600 hidden sm:block mt-1">
             Create beautiful invitations
           </p>
         </div>
@@ -898,67 +974,63 @@ export default function TemplateCreator() {
           onValueChange={setActiveTab}
           className="flex-1 flex flex-col min-h-0"
         >
-          <TabsList className="grid w-full grid-cols-4 h-fit gap-2 p-2 flex-shrink-0">
+          <TabsList className="grid grid-cols-4 w-full h-fit gap-1 p-2 bg-gray-50 border-b border-gray-200">
             <TabsTrigger
               value="elements"
-              className="flex items-center justify-center gap-2 text-sm font-medium px-3 py-2 data-[state=active]:bg-white data-[state=active]:shadow-sm rounded-md transition-all"
+              className="flex flex-col items-center justify-center gap-1 text-xs font-medium px-3 py-2 data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:border data-[state=active]:border-gray-200 rounded-lg transition-all hover:bg-gray-100 data-[state=active]:hover:bg-white h-16"
             >
-              <Layers className="w-4 h-4" />
-              <span>Elements</span>
+              <div className="w-6 h-6 bg-blue-100 rounded-md flex items-center justify-center data-[state=active]:bg-blue-500 transition-colors">
+                <Layers className="w-3 h-3 text-blue-600 data-[state=active]:text-white" />
+              </div>
+              <span className="font-medium text-xs">Elements</span>
             </TabsTrigger>
+
             <TabsTrigger
               value="images"
-              className="flex items-center justify-center gap-2 text-sm font-medium px-3 py-2 data-[state=active]:bg-white data-[state=active]:shadow-sm rounded-md transition-all"
+              className="flex flex-col items-center justify-center gap-1 text-xs font-medium px-3 py-2 data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:border data-[state=active]:border-gray-200 rounded-lg transition-all hover:bg-gray-100 data-[state=active]:hover:bg-white h-16"
             >
-              <ImageIcon className="w-4 h-4" />
-              <span>Images</span>
+              <div className="w-6 h-6 bg-green-100 rounded-md flex items-center justify-center data-[state=active]:bg-green-500 transition-colors">
+                <ImageIcon className="w-3 h-3 text-green-600 data-[state=active]:text-white" />
+              </div>
+              <span className="font-medium text-xs">Images</span>
             </TabsTrigger>
+
             <TabsTrigger
               value="backgrounds"
-              className="flex items-center justify-center gap-2 text-sm font-medium px-3 py-2 data-[state=active]:bg-white data-[state=active]:shadow-sm rounded-md transition-all"
+              className="flex flex-col items-center justify-center gap-1 text-xs font-medium px-3 py-2 data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:border data-[state=active]:border-gray-200 rounded-lg transition-all hover:bg-gray-100 data-[state=active]:hover:bg-white h-16"
             >
-              <Palette className="w-4 h-4" />
-              <span>Backgrounds</span>
+              <div className="w-6 h-6 bg-purple-100 rounded-md flex items-center justify-center data-[state=active]:bg-purple-500 transition-colors">
+                <Palette className="w-3 h-3 text-purple-600 data-[state=active]:text-white" />
+              </div>
+              <span className="font-medium text-xs">Scene</span>
             </TabsTrigger>
+
             <TabsTrigger
               value="icons"
-              className="flex items-center justify-center gap-2 text-sm font-medium px-3 py-2 data-[state=active]:bg-white data-[state=active]:shadow-sm rounded-md transition-all"
+              className="flex flex-col items-center justify-center gap-1 text-xs font-medium px-3 py-2 data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:border data-[state=active]:border-gray-200 rounded-lg transition-all hover:bg-gray-100 data-[state=active]:hover:bg-white h-16"
             >
-              <Star className="w-4 h-4" />
-              <span>Icons</span>
+              <div className="w-6 h-6 bg-orange-100 rounded-md flex items-center justify-center data-[state=active]:bg-orange-500 transition-colors">
+                <Star className="w-3 h-3 text-orange-600 data-[state=active]:text-white" />
+              </div>
+              <span className="font-medium text-xs">Icons</span>
             </TabsTrigger>
           </TabsList>
 
           <div className="flex-1 overflow-y-auto min-h-0">
             <TabsContent value="elements" className="mt-0 h-full">
-              <ElementsTab
-                selectedObject={selectedObject}
-                onAddText={addText}
-                onAddShape={addShape}
-                onSave={saveProject}
-                onLoad={loadProject}
-                onExport={exportProject}
-                onImport={importProject}
-              />
+              {memoizedElementsTab}
             </TabsContent>
 
             <TabsContent value="images" className="mt-0 h-full">
-              <ImagesTab
-                onImageUpload={handleImageUpload}
-                onStockImageSelect={selectStockImage}
-              />
+              {memoizedImagesTab}
             </TabsContent>
 
             <TabsContent value="backgrounds" className="mt-0 h-full">
-              <BackgroundsTab
-                backgroundColor={currentPage?.backgroundColor || "#ffffff"}
-                onBackgroundColorChange={changeBackgroundColor}
-                onBackgroundPatternSelect={selectBackgroundPattern}
-              />
+              {memoizedBackgroundsTab}
             </TabsContent>
 
             <TabsContent value="icons" className="mt-0 h-full">
-              <IconsTab onIconSelect={handleIconSelect} />
+              {memoizedIconsTab}
             </TabsContent>
           </div>
         </Tabs>

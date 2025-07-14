@@ -12,7 +12,7 @@ import {
   ChevronRight,
   Plus,
 } from "lucide-react";
-import { useRef, useState } from "react";
+import { useRef, useState, memo } from "react";
 import { SHAPE_CATEGORIES, getShapesByCategory } from "@/lib/shapes-config";
 
 interface ElementsTabProps {
@@ -25,7 +25,7 @@ interface ElementsTabProps {
   onImport: (file: File) => void;
 }
 
-export default function ElementsTab({
+const ElementsTab = memo(function ElementsTab({
   selectedObject,
   onAddText,
   onAddShape,
@@ -231,4 +231,6 @@ export default function ElementsTab({
       />
     </div>
   );
-}
+});
+
+export default ElementsTab;

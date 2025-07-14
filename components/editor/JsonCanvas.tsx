@@ -249,69 +249,6 @@ export default function JsonCanvas({
     }
   };
 
-  // Create SVG pattern for icons
-  const createSvgPattern = useCallback(
-    (svgData: string, color: string): Promise<fabric.Pattern> => {
-      return new Promise((resolve, reject) => {
-        if (!svgData) {
-          reject(new Error("No SVG data provided"));
-          return;
-        }
-
-        try {
-          const tempCanvas = document.createElement("canvas");
-          const tempCtx = tempCanvas.getContext("2d");
-          if (!tempCtx) {
-            reject(new Error("Could not get canvas context"));
-            return;
-          }
-
-          tempCanvas.width = 48;
-          tempCanvas.height = 48;
-
-          const img = new Image();
-          img.onload = () => {
-            tempCtx.clearRect(0, 0, 48, 48);
-            tempCtx.drawImage(img, 0, 0, 48, 48);
-
-            const patternCanvas = document.createElement("canvas");
-            patternCanvas.width = 48;
-            patternCanvas.height = 48;
-            const patternCtx = patternCanvas.getContext("2d");
-            if (!patternCtx) {
-              reject(new Error("Could not get pattern canvas context"));
-              return;
-            }
-
-            patternCtx.drawImage(tempCanvas, 0, 0);
-
-            const pattern = new fabric.Pattern({
-              source: patternCanvas,
-              repeat: "no-repeat",
-            });
-
-            resolve(pattern);
-          };
-
-          img.onerror = () => {
-            reject(new Error("Failed to load SVG image"));
-          };
-
-          const modifiedSvg = svgData
-            .replace(/fill="[^"]*"/g, `fill="${color}"`)
-            .replace(/stroke="[^"]*"/g, `stroke="${color}"`)
-            .replace(/<svg/g, '<svg xmlns="http://www.w3.org/2000/svg"');
-
-          const svgBlob = new Blob([modifiedSvg], { type: "image/svg+xml" });
-          img.src = URL.createObjectURL(svgBlob);
-        } catch (error) {
-          reject(error);
-        }
-      });
-    },
-    []
-  );
-
   // Create Fabric.js objects
   const createShapeObject = (obj: EditorObject): FabricObjectWithData => {
     let fabricObject: FabricObjectWithData;
@@ -445,6 +382,7 @@ export default function JsonCanvas({
       angle: obj.angle || 0,
       scaleX: obj.scaleX || 1,
       scaleY: obj.scaleY || 1,
+      editable: true,
     }) as FabricObjectWithData;
 
     // Set textDecoration property correctly
@@ -482,38 +420,224 @@ export default function JsonCanvas({
   const createIconObject = async (
     obj: EditorObject
   ): Promise<FabricObjectWithData> => {
-    const fabricObject = new fabric.Rect({
-      left: obj.left || 0,
-      top: obj.top || 0,
-      width: obj.width || 48,
-      height: obj.height || 48,
-      fill: obj.fill || "#000000",
-      stroke: "transparent",
-      strokeWidth: 0,
-      opacity: obj.opacity || 1,
-      angle: obj.angle || 0,
-      scaleX: obj.scaleX || 1,
-      scaleY: obj.scaleY || 1,
-    }) as FabricObjectWithData;
+    console.log("Creating icon object:", obj);
+    if (!obj.iconSvg) {
+      console.log("No iconSvg provided, creating fallback rectangle");
+      // Fallback to a simple rectangle if no SVG is provided
+      const fabricObject = new fabric.Rect({
+        left: obj.left || 0,
+        top: obj.top || 0,
+        width: obj.width || 48,
+        height: obj.height || 48,
+        fill: obj.fill || "#000000",
+        stroke: "transparent",
+        strokeWidth: 0,
+        opacity: obj.opacity || 1,
+        angle: obj.angle || 0,
+        scaleX: obj.scaleX || 1,
+        scaleY: obj.scaleY || 1,
+      }) as FabricObjectWithData;
 
-    fabricObject.data = { objectId: obj.id };
-    fabricObject.iconSvg = obj.iconSvg;
-    fabricObject.iconName = obj.iconName;
-    fabricObject.iconPrefix = obj.iconPrefix;
-
-    if (obj.iconSvg) {
-      try {
-        const pattern = await createSvgPattern(
-          obj.iconSvg,
-          obj.fill || "#000000"
-        );
-        fabricObject.set("fill", pattern);
-      } catch (error) {
-        console.error("Error creating SVG pattern:", error);
-      }
+      fabricObject.data = { objectId: obj.id };
+      return fabricObject;
     }
 
-    return fabricObject;
+    return new Promise((resolve) => {
+      try {
+        console.log("Creating icon from SVG data");
+
+        // Extract path data using regex (simpler approach)
+        const pathMatch = obj.iconSvg.match(/d="([^"]+)"/);
+        if (!pathMatch) {
+          console.error("No path data found in SVG");
+          createFallbackObject();
+          return;
+        }
+
+        const pathData = pathMatch[1];
+        console.log("Creating fabric path from SVG data");
+
+        // Create a fabric.js path object from the SVG path data
+        const fabricObject = new fabric.Path(pathData, {
+          left: obj.left || 0,
+          top: obj.top || 0,
+          fill: obj.fill || "transparent",
+          stroke: "transparent",
+          strokeWidth: 0,
+          opacity: obj.opacity || 1,
+          angle: obj.angle || 0,
+          scaleX: obj.scaleX || 1,
+          scaleY: obj.scaleY || 1,
+        }) as FabricObjectWithData;
+
+        fabricObject.data = { objectId: obj.id };
+        fabricObject.iconSvg = obj.iconSvg;
+        fabricObject.iconName = obj.iconName;
+        fabricObject.iconPrefix = obj.iconPrefix;
+
+        console.log("Icon object created successfully:", fabricObject);
+        resolve(fabricObject);
+
+        function createFallbackObject() {
+          console.log("Creating fallback circle for failed SVG");
+          const fabricObject = new fabric.Circle({
+            left: obj.left || 0,
+            top: obj.top || 0,
+            radius: 20,
+            fill: obj.fill || "transparent",
+            stroke: "transparent",
+            strokeWidth: 0,
+            opacity: obj.opacity || 1,
+            angle: obj.angle || 0,
+            scaleX: obj.scaleX || 1,
+            scaleY: obj.scaleY || 1,
+          }) as FabricObjectWithData;
+
+          fabricObject.data = { objectId: obj.id };
+          fabricObject.iconSvg = obj.iconSvg;
+          fabricObject.iconName = obj.iconName;
+          fabricObject.iconPrefix = obj.iconPrefix;
+          resolve(fabricObject);
+        }
+      } catch (error) {
+        console.error("Error creating icon object:", error);
+        // Create fallback circle
+        const fabricObject = new fabric.Circle({
+          left: obj.left || 0,
+          top: obj.top || 0,
+          radius: 20,
+          fill: obj.fill || "transparent",
+          stroke: "transparent",
+          strokeWidth: 0,
+          opacity: obj.opacity || 1,
+          angle: obj.angle || 0,
+          scaleX: obj.scaleX || 1,
+          scaleY: obj.scaleY || 1,
+        }) as FabricObjectWithData;
+
+        fabricObject.data = { objectId: obj.id };
+        fabricObject.iconSvg = obj.iconSvg;
+        fabricObject.iconName = obj.iconName;
+        fabricObject.iconPrefix = obj.iconPrefix;
+        resolve(fabricObject);
+      }
+    });
+  };
+
+  const createImageObject = async (
+    obj: EditorObject
+  ): Promise<FabricObjectWithData> => {
+    return new Promise((resolve, reject) => {
+      if (!obj.imageUrl) {
+        reject(new Error("No image URL provided"));
+        return;
+      }
+
+      console.log("Creating image object with URL:", obj.imageUrl);
+
+      // Load the image first
+      const img = new Image();
+
+      // Try different CORS settings
+      img.crossOrigin = "anonymous";
+
+      img.onload = () => {
+        console.log("Image loaded successfully:", obj.imageUrl);
+        try {
+          const fabricObject = new fabric.Image(img, {
+            left: obj.left || 0,
+            top: obj.top || 0,
+            opacity: obj.opacity || 1,
+            angle: obj.angle || 0,
+            scaleX: obj.scaleX || 1,
+            scaleY: obj.scaleY || 1,
+          }) as FabricObjectWithData;
+
+          fabricObject.data = { objectId: obj.id };
+          resolve(fabricObject);
+        } catch (error) {
+          console.error("Error creating Fabric.js image object:", error);
+          reject(error);
+        }
+      };
+
+      img.onerror = (error) => {
+        console.error(
+          "Failed to load image with CORS anonymous:",
+          obj.imageUrl,
+          error
+        );
+
+        // Try without CORS as fallback
+        const imgWithoutCors = new Image();
+        imgWithoutCors.onload = () => {
+          console.log("Image loaded successfully without CORS:", obj.imageUrl);
+          try {
+            const fabricObject = new fabric.Image(imgWithoutCors, {
+              left: obj.left || 0,
+              top: obj.top || 0,
+              opacity: obj.opacity || 1,
+              angle: obj.angle || 0,
+              scaleX: obj.scaleX || 1,
+              scaleY: obj.scaleY || 1,
+            }) as FabricObjectWithData;
+
+            fabricObject.data = { objectId: obj.id };
+            resolve(fabricObject);
+          } catch (error) {
+            console.error(
+              "Error creating Fabric.js image object without CORS:",
+              error
+            );
+            createFallbackObject();
+          }
+        };
+
+        imgWithoutCors.onerror = () => {
+          console.error("Failed to load image without CORS:", obj.imageUrl);
+          createFallbackObject();
+        };
+
+        imgWithoutCors.src = obj.imageUrl || "";
+      };
+
+      const createFallbackObject = () => {
+        console.log("Creating fallback object for failed image:", obj.imageUrl);
+        // Create a fallback rectangle with error message
+        const fallbackObject = new fabric.Rect({
+          left: obj.left || 0,
+          top: obj.top || 0,
+          width: 200,
+          height: 150,
+          fill: "#ff0000",
+          stroke: "#000000",
+          strokeWidth: 2,
+        }) as FabricObjectWithData;
+
+        fallbackObject.data = { objectId: obj.id };
+
+        // Add error text
+        const errorText = new fabric.Text("Image failed to load", {
+          left: obj.left || 0,
+          top: (obj.top || 0) + 75,
+          fontSize: 12,
+          fill: "#ffffff",
+          textAlign: "center",
+        });
+
+        // Create a group with the rectangle and text
+        const group = new fabric.Group([fallbackObject, errorText], {
+          left: obj.left || 0,
+          top: obj.top || 0,
+        }) as FabricObjectWithData;
+
+        group.data = { objectId: obj.id };
+        resolve(group);
+      };
+
+      // Set the source after setting up event handlers
+      img.src = obj.imageUrl || "";
+    });
   };
 
   // Update individual objects efficiently
@@ -661,7 +785,9 @@ export default function JsonCanvas({
         break;
 
       case "icon":
+        // Update icon properties - respect transparent fill
         const iconUpdates: Partial<fabric.Object> = {
+          fill: obj.fill || "transparent",
           opacity: obj.opacity || 1,
           angle: obj.angle || 0,
           scaleX: obj.scaleX || 1,
@@ -669,14 +795,34 @@ export default function JsonCanvas({
         };
 
         fabricObject.set(iconUpdates);
+        break;
 
-        if (obj.fill && obj.iconSvg) {
-          try {
-            const pattern = await createSvgPattern(obj.iconSvg, obj.fill);
-            fabricObject.set("fill", pattern);
-          } catch (error) {
-            console.error("Error updating icon pattern:", error);
+      case "image":
+        // Check if the image URL has changed
+        const currentImageUrl = (fabricObject as fabric.Image).getSrc();
+        if (obj.imageUrl && currentImageUrl !== obj.imageUrl) {
+          // Image URL changed, reload the image
+          console.log("Image URL changed, reloading image:", obj.imageUrl);
+
+          // Remove the old image object
+          canvas.remove(fabricObject);
+          fabricObjectsRef.current.delete(obj.id);
+
+          // Create new image object
+          const newImageObject = await createImageObject(obj);
+          if (newImageObject) {
+            canvas.add(newImageObject);
+            fabricObjectsRef.current.set(obj.id, newImageObject);
           }
+        } else {
+          // Only update position and transform properties
+          const imageUpdates: Partial<fabric.Object> = {
+            opacity: obj.opacity || 1,
+            angle: obj.angle || 0,
+            scaleX: obj.scaleX || 1,
+            scaleY: obj.scaleY || 1,
+          };
+          fabricObject.set(imageUpdates);
         }
         break;
     }
@@ -765,8 +911,6 @@ export default function JsonCanvas({
       const updates: Partial<EditorObject> = {
         left: target.left || 0,
         top: target.top || 0,
-        width: target.width || 100,
-        height: target.height || 100,
         angle: target.angle || 0,
         scaleX: target.scaleX || 1,
         scaleY: target.scaleY || 1,
@@ -794,6 +938,8 @@ export default function JsonCanvas({
         target.type === "circle" ||
         target.type === "triangle"
       ) {
+        updates.width = target.width || 100;
+        updates.height = target.height || 100;
         updates.fill = (target.fill as string) || "#3B82F6";
         updates.stroke = (target.stroke as string) || "#000000";
         updates.strokeWidth = target.strokeWidth || 0;
@@ -802,6 +948,10 @@ export default function JsonCanvas({
         if (target.type === "rect") {
           updates.cornerRadius = (target as fabric.Rect).rx || 0;
         }
+      } else if (target.type === "image") {
+        // For images, preserve the original dimensions and only update position/transform
+        updates.opacity = target.opacity || 1;
+        // Don't update width/height for images to preserve their original size
       }
 
       if (target.data?.objectId) {
@@ -836,11 +986,15 @@ export default function JsonCanvas({
       if (!target?.data?.objectId) return;
 
       const updates: Partial<EditorObject> = {
-        width: target.width || 100,
-        height: target.height || 100,
         scaleX: target.scaleX || 1,
         scaleY: target.scaleY || 1,
       };
+
+      // Only update width/height for non-image objects
+      if (target.type !== "image") {
+        updates.width = target.width || 100;
+        updates.height = target.height || 100;
+      }
 
       editorState.updateObjectSilent(target.data.objectId, updates);
     };
@@ -864,6 +1018,42 @@ export default function JsonCanvas({
     canvas.on("object:scaling", handleObjectScaling);
     canvas.on("object:rotating", handleObjectRotating);
 
+    // Add double-click event for text editing
+    canvas.on("mouse:dblclick", (e) => {
+      const target = e.target as FabricObjectWithData;
+      if (target && target.type === "text" && target.data?.objectId) {
+        // Enter text editing mode using canvas methods
+        canvas.setActiveObject(target);
+        canvas.renderAll();
+      }
+    });
+
+    // Handle text editing completion
+    canvas.on("text:changed", (e) => {
+      const target = e.target as FabricObjectWithData;
+      if (target && target.data?.objectId) {
+        // Update the text content in the editor state
+        const textObject = target as fabric.Text;
+        const updates: Partial<EditorObject> = {
+          text: textObject.text || "",
+        };
+        editorState.updateObjectSilent(target.data.objectId, updates);
+      }
+    });
+
+    // Handle text editing end
+    canvas.on("text:editing:exited", (e) => {
+      const target = e.target as FabricObjectWithData;
+      if (target && target.data?.objectId) {
+        // Update the text content in the editor state when editing is finished
+        const textObject = target as fabric.Text;
+        const updates: Partial<EditorObject> = {
+          text: textObject.text || "",
+        };
+        editorState.updateObjectSilent(target.data.objectId, updates);
+      }
+    });
+
     // Keyboard event handlers
     const handleKeyDown = (e: KeyboardEvent) => {
       const canvas = fabricCanvasRef.current;
@@ -879,7 +1069,6 @@ export default function JsonCanvas({
 
       switch (e.key) {
         case "Delete":
-        case "Backspace":
           e.preventDefault();
           editorState.deleteObject(fabricObj.data.objectId);
           canvas.remove(activeObject);
@@ -978,6 +1167,152 @@ export default function JsonCanvas({
     };
   }, [page.width, page.height, page.backgroundColor]);
 
+  // Update background color when it changes
+  useEffect(() => {
+    const canvas = fabricCanvasRef.current;
+    if (!canvas) return;
+
+    // Check if the background is a gradient or pattern
+    if (
+      page.backgroundColor.startsWith("linear-gradient") ||
+      page.backgroundColor.startsWith("radial-gradient")
+    ) {
+      // For gradients, we need to create a pattern
+      const gradientCanvas = document.createElement("canvas");
+      const gradientCtx = gradientCanvas.getContext("2d");
+      if (gradientCtx) {
+        gradientCanvas.width = page.width;
+        gradientCanvas.height = page.height;
+
+        // Parse gradient string
+        const gradientStr = page.backgroundColor;
+
+        if (gradientStr.startsWith("linear-gradient")) {
+          // Handle linear gradients
+          const matches = gradientStr.match(/#[A-Fa-f0-9]{6}/g);
+          if (matches && matches.length >= 2) {
+            const gradient = gradientCtx.createLinearGradient(
+              0,
+              0,
+              page.width,
+              page.height
+            );
+
+            // Add color stops
+            matches.forEach((color, index) => {
+              const stop = index / (matches.length - 1);
+              gradient.addColorStop(stop, color);
+            });
+
+            gradientCtx.fillStyle = gradient;
+            gradientCtx.fillRect(0, 0, page.width, page.height);
+          }
+        } else if (gradientStr.startsWith("radial-gradient")) {
+          // Handle radial gradients
+          const matches = gradientStr.match(/#[A-Fa-f0-9]{6}/g);
+          if (matches && matches.length >= 2) {
+            const gradient = gradientCtx.createRadialGradient(
+              page.width / 2,
+              page.height / 2,
+              0,
+              page.width / 2,
+              page.height / 2,
+              Math.max(page.width, page.height) / 2
+            );
+
+            // Add color stops
+            matches.forEach((color, index) => {
+              const stop = index / (matches.length - 1);
+              gradient.addColorStop(stop, color);
+            });
+
+            gradientCtx.fillStyle = gradient;
+            gradientCtx.fillRect(0, 0, page.width, page.height);
+          }
+        }
+
+        // Create fabric pattern from the canvas
+        const pattern = new fabric.Pattern({
+          source: gradientCanvas,
+          repeat: "no-repeat",
+        });
+
+        if (pattern) {
+          canvas.backgroundColor = pattern;
+          canvas.renderAll();
+        }
+      }
+    } else if (page.backgroundColor.startsWith("url(")) {
+      // Handle image backgrounds
+      const imageUrl = page.backgroundColor.match(
+        /url\(['"]?([^'"]+)['"]?\)/
+      )?.[1];
+      if (imageUrl) {
+        // Create a fabric pattern from the image using the same pattern as createImageObject
+        const img = new Image();
+        img.crossOrigin = "anonymous";
+
+        img.onload = () => {
+          // Create a canvas to scale the image to cover the full page
+          const tempCanvas = document.createElement("canvas");
+          const tempCtx = tempCanvas.getContext("2d");
+          if (!tempCtx) {
+            canvas.backgroundColor = "#ffffff";
+            canvas.renderAll();
+            return;
+          }
+
+          tempCanvas.width = page.width;
+          tempCanvas.height = page.height;
+
+          // Calculate scaling to cover the full canvas
+          const imgAspectRatio = img.width / img.height;
+          const canvasAspectRatio = page.width / page.height;
+
+          let drawWidth, drawHeight, drawX, drawY;
+
+          if (imgAspectRatio > canvasAspectRatio) {
+            // Image is wider than canvas - scale to height and crop width
+            drawHeight = page.height;
+            drawWidth = page.height * imgAspectRatio;
+            drawX = (page.width - drawWidth) / 2;
+            drawY = 0;
+          } else {
+            // Image is taller than canvas - scale to width and crop height
+            drawWidth = page.width;
+            drawHeight = page.width / imgAspectRatio;
+            drawX = 0;
+            drawY = (page.height - drawHeight) / 2;
+          }
+
+          // Draw the scaled image
+          tempCtx.drawImage(img, drawX, drawY, drawWidth, drawHeight);
+
+          // Create fabric pattern from the scaled canvas
+          const pattern = new fabric.Pattern({
+            source: tempCanvas,
+            repeat: "no-repeat",
+          });
+
+          canvas.backgroundColor = pattern;
+          canvas.renderAll();
+        };
+
+        img.onerror = () => {
+          // Fallback to white background if image fails to load
+          canvas.backgroundColor = "#ffffff";
+          canvas.renderAll();
+        };
+
+        img.src = imageUrl;
+      }
+    } else {
+      // For solid colors, use the backgroundColor directly
+      canvas.backgroundColor = page.backgroundColor;
+      canvas.renderAll();
+    }
+  }, [page.backgroundColor, page.width, page.height]);
+
   // Efficiently sync canvas objects with state
   useEffect(() => {
     const canvas = fabricCanvasRef.current;
@@ -1010,6 +1345,9 @@ export default function JsonCanvas({
               break;
             case "icon":
               fabricObject = await createIconObject(obj);
+              break;
+            case "image":
+              fabricObject = await createImageObject(obj);
               break;
             default:
               return;

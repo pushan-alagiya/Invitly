@@ -1,0 +1,236 @@
+"use client";
+
+import { Label } from "@/components/ui/label";
+import { EditorObject } from "@/lib/editor-state";
+import { Star, Palette, Eye } from "lucide-react";
+import { Separator } from "@/components/ui/separator";
+
+interface IconPropertiesProps {
+  selectedObject: EditorObject;
+  onUpdateObjectField: (field: string, value: string | number) => void;
+  onFieldBlur: () => void;
+}
+
+// Helper component for section headers
+const SectionHeader = ({
+  icon: Icon,
+  title,
+}: {
+  icon: React.ComponentType<{ className?: string }>;
+  title: string;
+}) => (
+  <div className="flex items-center gap-2 text-xs font-medium text-gray-600 uppercase tracking-wide mb-3">
+    <Icon className="w-3 h-3" />
+    <span>{title}</span>
+  </div>
+);
+
+// Helper component for color picker
+const ColorPicker = ({
+  label,
+  value,
+  onChange,
+  onBlur,
+  id,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  onBlur: () => void;
+  id: string;
+}) => (
+  <div>
+    <Label
+      htmlFor={id}
+      className="text-xs font-medium text-gray-700 mb-1 block"
+    >
+      {label}
+    </Label>
+    <div className="flex gap-2">
+      <input
+        type="color"
+        id={id}
+        value={value === "transparent" ? "#000000" : value}
+        onChange={(e) => onChange(e.target.value)}
+        onBlur={onBlur}
+        className="w-10 h-8 border border-gray-300 rounded cursor-pointer hover:border-gray-400 transition-colors"
+      />
+      <input
+        type="text"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        onBlur={onBlur}
+        className="flex-1 px-2 py-1 border border-gray-300 rounded text-xs focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+        placeholder="#000000 or transparent"
+      />
+      {value === "transparent" && (
+        <div className="flex items-center gap-1 text-xs text-gray-500">
+          <div className="w-3 h-3 border border-gray-300 bg-white bg-checkered"></div>
+          <span>Transparent</span>
+        </div>
+      )}
+    </div>
+  </div>
+);
+
+// Helper component for range slider
+const RangeSlider = ({
+  label,
+  value,
+  onChange,
+  onBlur,
+  min,
+  max,
+  step = 1,
+  unit = "",
+}: {
+  label: string;
+  value: number;
+  onChange: (value: number) => void;
+  onBlur: () => void;
+  min: number;
+  max: number;
+  step?: number;
+  unit?: string;
+}) => (
+  <div>
+    <div className="flex items-center justify-between mb-1">
+      <Label className="text-xs font-medium text-gray-700">{label}</Label>
+      <span className="text-xs text-gray-500">
+        {value}
+        {unit}
+      </span>
+    </div>
+    <input
+      type="range"
+      min={min}
+      max={max}
+      step={step}
+      value={value}
+      onChange={(e) => onChange(parseFloat(e.target.value))}
+      onBlur={onBlur}
+      className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer slider focus:outline-none focus:ring-2 focus:ring-blue-500"
+      style={{
+        background: `linear-gradient(to right, #3B82F6 0%, #3B82F6 ${
+          ((value - min) / (max - min)) * 100
+        }%, #E5E7EB ${((value - min) / (max - min)) * 100}%, #E5E7EB 100%)`,
+      }}
+    />
+    <style jsx>{`
+      .slider::-webkit-slider-thumb {
+        appearance: none;
+        height: 16px;
+        width: 16px;
+        border-radius: 50%;
+        background: #3b82f6;
+        cursor: pointer;
+        border: 2px solid #ffffff;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      }
+      .slider::-moz-range-thumb {
+        height: 16px;
+        width: 16px;
+        border-radius: 50%;
+        background: #3b82f6;
+        cursor: pointer;
+        border: 2px solid #ffffff;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      }
+    `}</style>
+  </div>
+);
+
+export default function IconProperties({
+  selectedObject,
+  onUpdateObjectField,
+  onFieldBlur,
+}: IconPropertiesProps) {
+  return (
+    <div className="space-y-6">
+      {/* Icon Info Section */}
+      <div>
+        <SectionHeader icon={Star} title="Icon Info" />
+        <div className="space-y-3">
+          <div>
+            <Label className="text-xs font-medium text-gray-700 mb-1 block">
+              Icon Name
+            </Label>
+            <div className="p-2 bg-gray-50 rounded-md text-xs text-gray-600">
+              {selectedObject.iconName || "Unknown"}
+            </div>
+          </div>
+          <div>
+            <Label className="text-xs font-medium text-gray-700 mb-1 block">
+              Icon Set
+            </Label>
+            <div className="p-2 bg-gray-50 rounded-md text-xs text-gray-600">
+              {selectedObject.iconPrefix || "Unknown"}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <Separator />
+
+      {/* Colors Section */}
+      <div>
+        <SectionHeader icon={Palette} title="Colors" />
+        <div className="space-y-3">
+          <ColorPicker
+            label="Icon Color"
+            value={selectedObject.fill || "#000000"}
+            onChange={(value) => onUpdateObjectField("fill", value)}
+            onBlur={onFieldBlur}
+            id="fill"
+          />
+          <div>
+            <Label className="text-xs font-medium text-gray-700 mb-1 block">
+              Quick Actions
+            </Label>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  onUpdateObjectField("fill", "transparent");
+                  onFieldBlur();
+                }}
+                className="px-3 py-1 text-xs bg-gray-100 hover:bg-gray-200 border border-gray-300 rounded transition-colors"
+              >
+                Make Transparent
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  onUpdateObjectField("fill", "#000000");
+                  onFieldBlur();
+                }}
+                className="px-3 py-1 text-xs bg-gray-100 hover:bg-gray-200 border border-gray-300 rounded transition-colors"
+              >
+                Make Black
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <Separator />
+
+      {/* Appearance Section */}
+      <div>
+        <SectionHeader icon={Eye} title="Appearance" />
+        <div className="space-y-3">
+          <RangeSlider
+            label="Opacity"
+            value={selectedObject.opacity || 1}
+            onChange={(value) => onUpdateObjectField("opacity", value)}
+            onBlur={onFieldBlur}
+            min={0}
+            max={1}
+            step={0.1}
+            unit="%"
+          />
+        </div>
+      </div>
+    </div>
+  );
+}

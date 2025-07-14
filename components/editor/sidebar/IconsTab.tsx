@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, memo } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -75,7 +75,7 @@ interface KeywordsResponse {
   matches: string[];
 }
 
-export default function IconsTab({ onIconSelect }: IconsTabProps) {
+const IconsTab = memo(function IconsTab({ onIconSelect }: IconsTabProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<IconData[]>([]);
   const [searchSuggestions, setSearchSuggestions] = useState<string[]>([]);
@@ -331,6 +331,7 @@ export default function IconsTab({ onIconSelect }: IconsTabProps) {
   }, [searchQuery, searchIcons]);
 
   const handleIconClick = (icon: IconData) => {
+    console.log("Icon clicked:", icon);
     onIconSelect(icon);
   };
 
@@ -430,7 +431,7 @@ export default function IconsTab({ onIconSelect }: IconsTabProps) {
                 <div className="py-1">
                   {searchSuggestions.map((suggestion, index) => (
                     <button
-                      key={index}
+                      key={`${suggestion}-${index}`}
                       className="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 focus:bg-gray-100 focus:outline-none"
                       onClick={() => handleSuggestionClick(suggestion)}
                     >
@@ -560,4 +561,6 @@ export default function IconsTab({ onIconSelect }: IconsTabProps) {
       </div>
     </div>
   );
-}
+});
+
+export default IconsTab;
