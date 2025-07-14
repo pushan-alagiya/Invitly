@@ -52,9 +52,17 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 import { imagekitService } from "@/lib/imagekit-service";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import fabric from "fabric";
 
 export default function TemplateCreator() {
   const [project, setProject] = useState(editorState.getProject());
@@ -76,11 +84,308 @@ export default function TemplateCreator() {
   const [customWidth, setCustomWidth] = useState("");
   const [customHeight, setCustomHeight] = useState("");
   const [forceCanvasUpdate, setForceCanvasUpdate] = useState(0);
+  const [showExportDialog, setShowExportDialog] = useState(false);
+  const [selectedExportPages, setSelectedExportPages] = useState<string[]>([]);
+  const [exportFormat, setExportFormat] = useState<
+    "png" | "jpeg" | "pdf" | "json"
+  >("png");
 
   const currentPage =
     project.pages.find((p) => p.id === selectedPageId) || null;
   const selectedObject =
     currentPage?.objects.find((obj) => obj.id === selectedObjectId) || null;
+
+  // Export functions - defined early so they're available for memoized components
+  const exportAsPNG = useCallback(() => {
+    if (selectedExportPages.length === 0) {
+      alert("Please select at least one page to export");
+      return;
+    }
+
+    // Store current page selection
+    const originalSelectedPage = selectedPageId;
+
+    // Export each selected page individually
+    selectedExportPages.forEach(async (pageId) => {
+      const page = project.pages.find((p) => p.id === pageId);
+      if (!page) return;
+
+      // Temporarily switch to this page
+      editorState.selectPage(pageId);
+
+      // Wait for the canvas to update and all elements to render
+      setTimeout(async () => {
+        const canvas = document.querySelector("canvas");
+        if (!canvas) return;
+
+        // Get the fabric canvas instance and force render
+        const canvasElement = canvas as HTMLCanvasElement;
+        const fabricCanvas = (
+          canvasElement as unknown as { __fabric?: fabric.Canvas }
+        ).__fabric;
+        if (fabricCanvas) {
+          // Force render all objects
+          fabricCanvas.renderAll();
+          // Wait a bit more for any async rendering
+          await new Promise((resolve) => setTimeout(resolve, 300));
+        }
+
+        // Create a temporary canvas to handle zoom scaling
+        const tempCanvas = document.createElement("canvas");
+        const tempCtx = tempCanvas.getContext("2d");
+        if (!tempCtx) return;
+
+        // Set the size to the page dimensions
+        tempCanvas.width = page.width || 800;
+        tempCanvas.height = page.height || 600;
+
+        // Draw the canvas content scaled to fit the page dimensions
+        tempCtx.drawImage(canvas, 0, 0, tempCanvas.width, tempCanvas.height);
+
+        // Convert to PNG
+        const dataURL = tempCanvas.toDataURL("image/png");
+        const link = document.createElement("a");
+        link.download = `${page.name || "page"}.png`;
+        link.href = dataURL;
+        link.click();
+      }, 500);
+    });
+
+    // Restore original page selection
+    setTimeout(() => {
+      editorState.selectPage(originalSelectedPage);
+    }, selectedExportPages.length * 800);
+
+    setShowExportDialog(false);
+    setSelectedExportPages([]);
+  }, [selectedExportPages, project.pages, selectedPageId]);
+
+  const exportAsJPEG = useCallback(() => {
+    if (selectedExportPages.length === 0) {
+      alert("Please select at least one page to export");
+      return;
+    }
+
+    // Store current page selection
+    const originalSelectedPage = selectedPageId;
+
+    // Export each selected page individually
+    selectedExportPages.forEach(async (pageId) => {
+      const page = project.pages.find((p) => p.id === pageId);
+      if (!page) return;
+
+      // Temporarily switch to this page
+      editorState.selectPage(pageId);
+
+      // Wait for the canvas to update and all elements to render
+      setTimeout(async () => {
+        const canvas = document.querySelector("canvas");
+        if (!canvas) return;
+
+        // Get the fabric canvas instance and force render
+        const canvasElement = canvas as HTMLCanvasElement;
+        const fabricCanvas = (
+          canvasElement as unknown as { __fabric?: fabric.Canvas }
+        ).__fabric;
+        if (fabricCanvas) {
+          // Force render all objects
+          fabricCanvas.renderAll();
+          // Wait a bit more for any async rendering
+          await new Promise((resolve) => setTimeout(resolve, 300));
+        }
+
+        // Create a temporary canvas to handle zoom scaling
+        const tempCanvas = document.createElement("canvas");
+        const tempCtx = tempCanvas.getContext("2d");
+        if (!tempCtx) return;
+
+        // Set the size to the page dimensions
+        tempCanvas.width = page.width || 800;
+        tempCanvas.height = page.height || 600;
+
+        // Draw the canvas content scaled to fit the page dimensions
+        tempCtx.drawImage(canvas, 0, 0, tempCanvas.width, tempCanvas.height);
+
+        // Convert to JPEG
+        const dataURL = tempCanvas.toDataURL("image/jpeg", 0.9);
+        const link = document.createElement("a");
+        link.download = `${page.name || "page"}.jpg`;
+        link.href = dataURL;
+        link.click();
+      }, 500);
+    });
+
+    // Restore original page selection
+    setTimeout(() => {
+      editorState.selectPage(originalSelectedPage);
+    }, selectedExportPages.length * 800);
+
+    setShowExportDialog(false);
+    setSelectedExportPages([]);
+  }, [selectedExportPages, project.pages, selectedPageId]);
+
+  const exportAsPDF = useCallback(async () => {
+    if (selectedExportPages.length === 0) {
+      alert("Please select at least one page to export");
+      return;
+    }
+
+    // Store current page selection
+    const originalSelectedPage = selectedPageId;
+
+    try {
+      // Convert to PDF using jsPDF
+      const { default: jsPDF } = await import("jspdf");
+
+      // Get the first page to determine initial PDF size
+      const firstPage = project.pages.find(
+        (p) => p.id === selectedExportPages[0]
+      );
+      if (!firstPage) return;
+
+      // Create PDF with the dimensions of the first page
+      const pdf = new jsPDF({
+        orientation:
+          firstPage.width > firstPage.height ? "landscape" : "portrait",
+        unit: "px",
+        format: [firstPage.width, firstPage.height],
+      });
+
+      // Export each selected page sequentially
+      for (let i = 0; i < selectedExportPages.length; i++) {
+        const pageId = selectedExportPages[i];
+        const page = project.pages.find((p) => p.id === pageId);
+        if (!page) continue;
+
+        // Switch to this page
+        editorState.selectPage(pageId);
+
+        // Wait for the canvas to update and all elements to render
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+
+        // Force canvas to render all elements
+        const canvas = document.querySelector("canvas");
+        if (!canvas) continue;
+
+        // Get the fabric canvas instance and force render
+        const canvasElement = canvas as HTMLCanvasElement;
+        const fabricCanvas = (
+          canvasElement as unknown as { __fabric?: fabric.Canvas }
+        ).__fabric;
+        if (fabricCanvas) {
+          // Force render all objects
+          fabricCanvas.renderAll();
+          // Wait a bit more for any async rendering
+          await new Promise((resolve) => setTimeout(resolve, 500));
+        }
+
+        // Create a temporary canvas for this page
+        const tempCanvas = document.createElement("canvas");
+        const tempCtx = tempCanvas.getContext("2d");
+        if (!tempCtx) continue;
+
+        tempCanvas.width = page.width || 800;
+        tempCanvas.height = page.height || 600;
+
+        // Draw the canvas content scaled to fit the page dimensions
+        tempCtx.drawImage(canvas, 0, 0, tempCanvas.width, tempCanvas.height);
+
+        const imgData = tempCanvas.toDataURL("image/png");
+
+        // If this is not the first page, add a new page
+        if (i > 0) {
+          // For subsequent pages, we need to create a new page with the correct dimensions
+          const currentPage = project.pages.find((p) => p.id === pageId);
+          if (currentPage) {
+            // Add new page with the current page's dimensions
+            pdf.addPage([currentPage.width, currentPage.height]);
+          } else {
+            pdf.addPage();
+          }
+        }
+
+        // Add image to PDF
+        pdf.addImage(
+          imgData,
+          "PNG",
+          0,
+          0,
+          page.width || 800,
+          page.height || 600
+        );
+      }
+
+      // Save the PDF
+      pdf.save("wedding-invitation.pdf");
+    } catch (error) {
+      console.error("Error creating PDF:", error);
+      alert(
+        "PDF export requires jsPDF library. Please install it or use PNG/JPEG export instead."
+      );
+    } finally {
+      // Restore original page selection
+      setTimeout(() => {
+        editorState.selectPage(originalSelectedPage);
+      }, 100);
+    }
+
+    setShowExportDialog(false);
+    setSelectedExportPages([]);
+  }, [selectedExportPages, project.pages, selectedPageId]);
+
+  const exportProject = useCallback(() => {
+    const projectToExport = {
+      ...project,
+      pages: project.pages.filter((page) =>
+        selectedExportPages.includes(page.id)
+      ),
+    };
+
+    const jsonString = JSON.stringify(projectToExport, null, 2);
+    const blob = new Blob([jsonString], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${project.name || "project"}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    setShowExportDialog(false);
+    setSelectedExportPages([]);
+  }, [project, selectedExportPages]);
+
+  const handleExport = async () => {
+    switch (exportFormat) {
+      case "png":
+        exportAsPNG();
+        break;
+      case "jpeg":
+        exportAsJPEG();
+        break;
+      case "pdf":
+        await exportAsPDF();
+        break;
+      case "json":
+        exportProject();
+        break;
+    }
+  };
+
+  const handleSelectAllPages = () => {
+    setSelectedExportPages(project.pages.map((page) => page.id));
+  };
+
+  const handleDeselectAllPages = () => {
+    setSelectedExportPages([]);
+  };
+
+  const handlePageSelectionChange = (pageId: string, checked: boolean) => {
+    setSelectedExportPages((prev) =>
+      checked ? [...prev, pageId] : prev.filter((id) => id !== pageId)
+    );
+  };
 
   // Pagination logic
   const pagesPerView = 4;
@@ -824,104 +1129,6 @@ export default function TemplateCreator() {
     editorState.loadFromLocalStorage();
   }, []);
 
-  const exportProject = useCallback(() => {
-    const json = editorState.exportProject();
-    const blob = new Blob([json], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "wedding-invitation.json";
-    a.click();
-    URL.revokeObjectURL(url);
-  }, []);
-
-  const exportAsPNG = useCallback(() => {
-    const canvas = document.querySelector("canvas");
-    if (!canvas) return;
-
-    // Create a temporary canvas to handle zoom scaling
-    const tempCanvas = document.createElement("canvas");
-    const tempCtx = tempCanvas.getContext("2d");
-    if (!tempCtx) return;
-
-    // Set the size to the page dimensions
-    tempCanvas.width = currentPage?.width || 800;
-    tempCanvas.height = currentPage?.height || 600;
-
-    // Draw the canvas content scaled to fit the page dimensions
-    tempCtx.drawImage(canvas, 0, 0, tempCanvas.width, tempCanvas.height);
-
-    // Convert to PNG
-    const dataURL = tempCanvas.toDataURL("image/png");
-    const link = document.createElement("a");
-    link.download = `${currentPage?.name || "wedding-invitation"}.png`;
-    link.href = dataURL;
-    link.click();
-  }, [currentPage]);
-
-  const exportAsJPEG = useCallback(() => {
-    const canvas = document.querySelector("canvas");
-    if (!canvas) return;
-
-    // Create a temporary canvas to handle zoom scaling
-    const tempCanvas = document.createElement("canvas");
-    const tempCtx = tempCanvas.getContext("2d");
-    if (!tempCtx) return;
-
-    // Set the size to the page dimensions
-    tempCanvas.width = currentPage?.width || 800;
-    tempCanvas.height = currentPage?.height || 600;
-
-    // Draw the canvas content scaled to fit the page dimensions
-    tempCtx.drawImage(canvas, 0, 0, tempCanvas.width, tempCanvas.height);
-
-    // Convert to JPEG
-    const dataURL = tempCanvas.toDataURL("image/jpeg", 0.9);
-    const link = document.createElement("a");
-    link.download = `${currentPage?.name || "wedding-invitation"}.jpg`;
-    link.href = dataURL;
-    link.click();
-  }, [currentPage]);
-
-  const exportAsPDF = useCallback(() => {
-    const canvas = document.querySelector("canvas");
-    if (!canvas) return;
-
-    // Create a temporary canvas to handle zoom scaling
-    const tempCanvas = document.createElement("canvas");
-    const tempCtx = tempCanvas.getContext("2d");
-    if (!tempCtx) return;
-
-    // Set the size to the page dimensions
-    tempCanvas.width = currentPage?.width || 800;
-    tempCanvas.height = currentPage?.height || 600;
-
-    // Draw the canvas content scaled to fit the page dimensions
-    tempCtx.drawImage(canvas, 0, 0, tempCanvas.width, tempCanvas.height);
-
-    // Convert to PDF using jsPDF
-    import("jspdf")
-      .then(({ default: jsPDF }) => {
-        const pdf = new jsPDF({
-          orientation:
-            tempCanvas.width > tempCanvas.height ? "landscape" : "portrait",
-          unit: "px",
-          format: [tempCanvas.width, tempCanvas.height],
-        });
-
-        const imgData = tempCanvas.toDataURL("image/png");
-        pdf.addImage(imgData, "PNG", 0, 0, tempCanvas.width, tempCanvas.height);
-        pdf.save(`${currentPage?.name || "wedding-invitation"}.pdf`);
-      })
-      .catch((error) => {
-        console.error("Error loading jsPDF:", error);
-        // Fallback: show alert to user
-        alert(
-          "PDF export requires jsPDF library. Please install it or use PNG/JPEG export instead."
-        );
-      });
-  }, [currentPage]);
-
   const importProject = useCallback((file: File) => {
     const reader = new FileReader();
     reader.onload = (e) => {
@@ -1587,54 +1794,15 @@ export default function TemplateCreator() {
                 <Save className="w-3 h-3 lg:w-4 lg:h-4 mr-1 lg:mr-2" />
                 <span className="hidden sm:inline">Save</span>
               </Button> */}
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="h-8 px-2 lg:px-3"
-                  >
-                    <Download className="w-3 h-3 lg:w-4 lg:h-4 mr-1 lg:mr-2" />
-                    <span className="hidden sm:inline">Export</span>
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-48 p-2" align="end">
-                  <div className="space-y-1">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={exportAsPNG}
-                      className="w-full justify-start"
-                    >
-                      PNG Image
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={exportAsJPEG}
-                      className="w-full justify-start"
-                    >
-                      JPEG Image
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={exportAsPDF}
-                      className="w-full justify-start"
-                    >
-                      PDF Document
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={exportProject}
-                      className="w-full justify-start"
-                    >
-                      JSON Project
-                    </Button>
-                  </div>
-                </PopoverContent>
-              </Popover>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowExportDialog(true)}
+                className="h-8 px-2 lg:px-3"
+              >
+                <Download className="w-3 h-3 lg:w-4 lg:h-4 mr-1 lg:mr-2" />
+                <span className="hidden sm:inline">Export</span>
+              </Button>
             </div>
           </div>
         </div>
@@ -1879,6 +2047,110 @@ export default function TemplateCreator() {
           )}
         </div>
       </div>
+
+      {/* Export Dialog */}
+      <Dialog open={showExportDialog} onOpenChange={setShowExportDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Export Project</DialogTitle>
+            <DialogDescription>
+              Choose the format and pages to export your invitation project.
+            </DialogDescription>
+          </DialogHeader>
+
+          {/* Export Format Selection */}
+          <div className="mb-4">
+            <label className="text-sm font-medium text-gray-700 mb-2 block">
+              Export Format:
+            </label>
+            <Select
+              onValueChange={(value) =>
+                setExportFormat(value as "png" | "jpeg" | "pdf" | "json")
+              }
+              value={exportFormat}
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Select format" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="png">PNG Image</SelectItem>
+                <SelectItem value="jpeg">JPEG Image</SelectItem>
+                <SelectItem value="pdf">PDF Document</SelectItem>
+                <SelectItem value="json">JSON Project</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Page Selection */}
+          <div className="mb-4">
+            <div className="flex items-center justify-between mb-2">
+              <label className="text-sm font-medium text-gray-700">
+                Select Pages:
+              </label>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleSelectAllPages}
+                  className="text-xs"
+                >
+                  Select All
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleDeselectAllPages}
+                  className="text-xs"
+                >
+                  Clear All
+                </Button>
+              </div>
+            </div>
+            <div className="max-h-48 overflow-y-auto border border-gray-200 rounded-md p-2">
+              {project.pages.map((page) => (
+                <div key={page.id} className="flex items-center space-x-2 py-1">
+                  <input
+                    type="checkbox"
+                    id={`page-${page.id}`}
+                    checked={selectedExportPages.includes(page.id)}
+                    onChange={(e) =>
+                      handlePageSelectionChange(page.id, e.target.checked)
+                    }
+                    className="rounded"
+                  />
+                  <label
+                    htmlFor={`page-${page.id}`}
+                    className="text-sm text-gray-700 cursor-pointer"
+                  >
+                    {page.name}
+                  </label>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Action Buttons */}
+          <div className="flex gap-2">
+            <Button
+              className="flex-1"
+              onClick={handleExport}
+              disabled={selectedExportPages.length === 0}
+            >
+              Export ({selectedExportPages.length} page
+              {selectedExportPages.length !== 1 ? "s" : ""})
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowExportDialog(false);
+                setSelectedExportPages([]);
+              }}
+            >
+              Cancel
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

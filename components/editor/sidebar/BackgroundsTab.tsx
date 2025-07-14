@@ -546,9 +546,9 @@ const BackgroundsTab = memo(function BackgroundsTab({
                         </Button>
                       </div>
                       <div className="grid grid-cols-3 gap-1 max-h-32 overflow-y-auto">
-                        {uploadedImages.map((image) => (
+                        {uploadedImages.map((image, index) => (
                           <button
-                            key={image.id}
+                            key={`${image.id}-${index}`}
                             onClick={() => applyImageBackground(image.url)}
                             className="aspect-square rounded border border-gray-200 hover:border-blue-400 transition-colors overflow-hidden"
                           >
@@ -655,9 +655,9 @@ const BackgroundsTab = memo(function BackgroundsTab({
                         Search Results ({searchResults.length})
                       </h4>
                       <div className="grid grid-cols-3 gap-1 max-h-24 overflow-y-auto">
-                        {searchResults.map((image) => (
+                        {searchResults.map((image, index) => (
                           <button
-                            key={image.id}
+                            key={`${image.id}-${index}`}
                             onClick={() =>
                               applyImageBackground(image.urls.regular)
                             }
