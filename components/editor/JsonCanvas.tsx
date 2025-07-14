@@ -41,6 +41,7 @@ export default function JsonCanvas({
   const fabricCanvasRef = useRef<fabric.Canvas | null>(null);
   const selectionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const moveUpdateTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const isDraggingRef = useRef(false);
 
   // Track Fabric.js objects by their object IDs for efficient updates
   const fabricObjectsRef = useRef<Map<string, FabricObjectWithData>>(new Map());
@@ -447,7 +448,7 @@ export default function JsonCanvas({
         console.log("Creating icon from SVG data");
 
         // Extract path data using regex (simpler approach)
-        const pathMatch = obj.iconSvg.match(/d="([^"]+)"/);
+        const pathMatch = obj.iconSvg?.match(/d="([^"]+)"/);
         if (!pathMatch) {
           console.error("No path data found in SVG");
           createFallbackObject();
@@ -908,6 +909,8 @@ export default function JsonCanvas({
       const target = e.target as FabricObjectWithData;
       if (!target?.data?.objectId) return;
 
+      isDraggingRef.current = false;
+
       const updates: Partial<EditorObject> = {
         left: target.left || 0,
         top: target.top || 0,
@@ -964,6 +967,7 @@ export default function JsonCanvas({
       if (!target?.data?.objectId) return;
 
       target.isMoving = true;
+      isDraggingRef.current = true;
 
       if (moveUpdateTimeoutRef.current) {
         clearTimeout(moveUpdateTimeoutRef.current);
@@ -985,6 +989,8 @@ export default function JsonCanvas({
       const target = e.target as FabricObjectWithData;
       if (!target?.data?.objectId) return;
 
+      isDraggingRef.current = true;
+
       const updates: Partial<EditorObject> = {
         scaleX: target.scaleX || 1,
         scaleY: target.scaleY || 1,
@@ -1002,6 +1008,8 @@ export default function JsonCanvas({
     const handleObjectRotating = (e: { target?: fabric.Object }) => {
       const target = e.target as FabricObjectWithData;
       if (!target?.data?.objectId) return;
+
+      isDraggingRef.current = true;
 
       const updates: Partial<EditorObject> = {
         angle: target.angle || 0,
@@ -1311,6 +1319,61 @@ export default function JsonCanvas({
       canvas.backgroundColor = page.backgroundColor;
       canvas.renderAll();
     }
+
+    // Force a complete re-sync of all objects after background change
+    setTimeout(async () => {
+      if (canvas) {
+        try {
+          // Get all current objects
+          const currentObjects = Array.from(fabricObjectsRef.current.entries());
+
+          // Remove all content objects (but keep grid/ruler)
+          const objects = canvas.getObjects();
+          objects.forEach((obj) => {
+            if (
+              !(obj as FabricObjectWithData).data?.isGridLine &&
+              !(obj as FabricObjectWithData).data?.isRuler
+            ) {
+              canvas.remove(obj);
+            }
+          });
+
+          // Re-add all objects to ensure proper layering
+          // Handle images specially since they are async
+          for (const [objectId, fabricObject] of currentObjects) {
+            const pageObject = page.objects.find((obj) => obj.id === objectId);
+            if (pageObject && pageObject.type === "image") {
+              // Re-create image object to ensure proper loading
+              try {
+                const newImageObject = await createImageObject(pageObject);
+                if (newImageObject) {
+                  canvas.add(newImageObject);
+                  fabricObjectsRef.current.set(objectId, newImageObject);
+                }
+              } catch (error) {
+                console.error("Error recreating image object:", error);
+                // Fallback: add the original object
+                canvas.add(fabricObject);
+              }
+            } else {
+              // For non-image objects, just re-add them
+              canvas.add(fabricObject);
+            }
+          }
+
+          // Force a re-render
+          canvas.renderAll();
+          canvas.requestRenderAll();
+
+          // Re-add grid and ruler after background change to ensure they stay on top
+          updateGridAndRuler();
+        } catch (error) {
+          console.error("Error during background update:", error);
+          // Fallback: just render the canvas
+          canvas.renderAll();
+        }
+      }
+    }, 100);
   }, [page.backgroundColor, page.width, page.height]);
 
   // Efficiently sync canvas objects with state
@@ -1318,63 +1381,147 @@ export default function JsonCanvas({
     const canvas = fabricCanvasRef.current;
     if (!canvas) return;
 
+    // Don't update during drag operations
+    if (isDraggingRef.current) {
+      return;
+    }
+
     const currentObjects = new Set(page.objects.map((obj) => obj.id));
     const fabricObjects = fabricObjectsRef.current;
 
-    // Remove objects that no longer exist in state
-    for (const [objectId, fabricObject] of fabricObjects) {
-      if (!currentObjects.has(objectId)) {
-        canvas.remove(fabricObject);
-        fabricObjects.delete(objectId);
+    // Store current selection before any changes
+    const activeSelection = canvas.getActiveObjects();
+    const selectedObjectIds = activeSelection
+      .map((obj) => (obj as FabricObjectWithData).data?.objectId)
+      .filter((id) => id !== undefined) as string[];
+
+    // Check if this is just a reordering operation (same objects, different order)
+    const currentObjectIds = Array.from(fabricObjects.keys());
+    const newObjectIds = page.objects.map((obj) => obj.id);
+    const isReordering =
+      currentObjectIds.length === newObjectIds.length &&
+      currentObjectIds.every((id) => newObjectIds.includes(id));
+
+    if (isReordering) {
+      // Handle reordering more surgically - only move objects without recreating
+      const currentCanvasObjects = canvas
+        .getObjects()
+        .filter(
+          (obj) =>
+            !(obj as FabricObjectWithData).data?.isGridLine &&
+            !(obj as FabricObjectWithData).data?.isRuler
+        );
+
+      // Create a map of current positions
+      const currentPositions = new Map();
+      currentCanvasObjects.forEach((obj, index) => {
+        const fabricObj = obj as FabricObjectWithData;
+        if (fabricObj.data?.objectId) {
+          currentPositions.set(fabricObj.data.objectId, index);
+        }
+      });
+
+      // Check if any objects need to be moved
+      let needsReordering = false;
+      for (let i = 0; i < page.objects.length; i++) {
+        const expectedId = page.objects[i].id;
+        const currentIndex = currentPositions.get(expectedId);
+        if (currentIndex !== i) {
+          needsReordering = true;
+          break;
+        }
+      }
+
+      if (needsReordering) {
+        // Remove all content objects (but keep grid/ruler)
+        currentCanvasObjects.forEach((obj) => {
+          canvas.remove(obj);
+        });
+
+        // Add objects back in the correct order
+        for (const obj of page.objects) {
+          const fabricObject = fabricObjects.get(obj.id);
+          if (fabricObject) {
+            canvas.add(fabricObject);
+          }
+        }
+      }
+    } else {
+      // Handle object addition/removal
+      // Remove objects that no longer exist in state
+      for (const [objectId, fabricObject] of fabricObjects) {
+        if (!currentObjects.has(objectId)) {
+          canvas.remove(fabricObject);
+          fabricObjects.delete(objectId);
+        }
+      }
+
+      // Add new objects
+      for (const obj of page.objects) {
+        let fabricObject = fabricObjects.get(obj.id);
+
+        if (!fabricObject) {
+          // Create new object
+          (async () => {
+            switch (obj.type) {
+              case "text":
+                fabricObject = createTextObject(obj);
+                break;
+              case "shape":
+                fabricObject = createShapeObject(obj);
+                break;
+              case "icon":
+                fabricObject = await createIconObject(obj);
+                break;
+              case "image":
+                fabricObject = await createImageObject(obj);
+                break;
+              default:
+                return;
+            }
+
+            if (fabricObject) {
+              canvas.add(fabricObject);
+              fabricObjects.set(obj.id, fabricObject);
+              canvas.renderAll();
+            }
+          })();
+        } else {
+          // Check if shape type changed
+          if (obj.type === "shape" && fabricObject.type !== obj.shapeType) {
+            // If shape type changed, recreate the object
+            canvas.remove(fabricObject);
+            fabricObjects.delete(obj.id);
+
+            const newFabricObject = createShapeObject(obj);
+            canvas.add(newFabricObject);
+            fabricObjects.set(obj.id, newFabricObject);
+            canvas.renderAll();
+          } else {
+            // Update existing object properties
+            updateObject(obj);
+          }
+        }
       }
     }
 
-    // Add or update objects
-    for (const obj of page.objects) {
-      let fabricObject = fabricObjects.get(obj.id);
+    // Restore selection after any changes
+    if (selectedObjectIds.length > 0) {
+      const objectsToSelect = selectedObjectIds
+        .map((id) => fabricObjects.get(id))
+        .filter((obj) => obj !== undefined) as FabricObjectWithData[];
 
-      if (!fabricObject) {
-        // Create new object
-        (async () => {
-          switch (obj.type) {
-            case "text":
-              fabricObject = createTextObject(obj);
-              break;
-            case "shape":
-              fabricObject = createShapeObject(obj);
-              break;
-            case "icon":
-              fabricObject = await createIconObject(obj);
-              break;
-            case "image":
-              fabricObject = await createImageObject(obj);
-              break;
-            default:
-              return;
-          }
-
-          if (fabricObject) {
-            canvas.add(fabricObject);
-            fabricObjects.set(obj.id, fabricObject);
-            canvas.renderAll();
-          }
-        })();
-      } else {
-        // Update existing object
-        if (obj.type === "shape" && fabricObject.type !== obj.shapeType) {
-          // If shape type changed, recreate the object
-          canvas.remove(fabricObject);
-          fabricObjects.delete(obj.id);
-
-          const newFabricObject = createShapeObject(obj);
-          canvas.add(newFabricObject);
-          fabricObjects.set(obj.id, newFabricObject);
-          canvas.renderAll();
-        } else {
-          // Update existing object
-          updateObject(obj);
-        }
+      if (objectsToSelect.length === 1) {
+        // Single selection
+        canvas.setActiveObject(objectsToSelect[0]);
+      } else if (objectsToSelect.length > 1) {
+        // Multi-selection
+        const selection = new fabric.ActiveSelection(objectsToSelect, {
+          canvas: canvas,
+        });
+        canvas.setActiveObject(selection);
       }
+      canvas.renderAll();
     }
 
     // Force a final re-render to ensure all changes are visible
@@ -1382,7 +1529,7 @@ export default function JsonCanvas({
       if (canvas) {
         canvas.requestRenderAll();
       }
-    }, 0);
+    }, 100);
 
     // Update grid and ruler
     updateGridAndRuler();
@@ -1400,15 +1547,17 @@ export default function JsonCanvas({
   }, [showGrid, showRuler]);
 
   return (
-    <div className="flex items-center h-full">
+    <div className="h-full overflow-auto">
       <div
-        className="bg-white shadow-lg relative"
+        className="bg-white shadow-lg relative inline-block"
         style={{
           position: "relative",
           zIndex: 1,
           transform: `scale(${zoomLevel})`,
           transformOrigin: "top left",
           transition: "transform 0.2s ease-in-out",
+          width: `${page.width}px`,
+          height: `${page.height}px`,
         }}
       >
         <canvas
@@ -1417,6 +1566,8 @@ export default function JsonCanvas({
           style={{
             display: "block",
             position: "relative",
+            width: `${page.width}px`,
+            height: `${page.height}px`,
           }}
         />
       </div>

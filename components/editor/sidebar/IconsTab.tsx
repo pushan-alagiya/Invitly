@@ -67,26 +67,15 @@ interface SearchResponse {
   request: Record<string, string>;
 }
 
-interface KeywordsResponse {
-  prefix?: string;
-  keyword?: string;
-  invalid?: boolean;
-  exists: boolean;
-  matches: string[];
-}
-
 const IconsTab = memo(function IconsTab({ onIconSelect }: IconsTabProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<IconData[]>([]);
-  const [searchSuggestions, setSearchSuggestions] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [popularIcons, setPopularIcons] = useState<IconData[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalResults, setTotalResults] = useState(0);
   const [hasMoreResults, setHasMoreResults] = useState(false);
-  const [showSuggestions, setShowSuggestions] = useState(false);
 
   // Popular icon sets to search from
   const popularIconSets = [
@@ -120,41 +109,6 @@ const IconsTab = memo(function IconsTab({ onIconSelect }: IconsTabProps) {
     { id: "sports", name: "Sports", icon: Trophy },
     { id: "entertainment", name: "Entertainment", icon: Camera },
   ];
-
-  // Get search suggestions using the keywords API
-  const getSearchSuggestions = useCallback(async (query: string) => {
-    if (!query.trim() || query.length < 2) {
-      setSearchSuggestions([]);
-      setShowSuggestions(false);
-      return;
-    }
-
-    setIsLoadingSuggestions(true);
-    try {
-      const keywordsUrl = new URL("https://api.iconify.design/keywords");
-      keywordsUrl.searchParams.set("keyword", query);
-
-      const response = await fetch(keywordsUrl.toString());
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const data: KeywordsResponse = await response.json();
-
-      if (data.invalid) {
-        setSearchSuggestions([]);
-      } else {
-        setSearchSuggestions(data.matches.slice(0, 8)); // Limit to 8 suggestions
-        setShowSuggestions(true);
-      }
-    } catch (error) {
-      console.error("Error fetching search suggestions:", error);
-      setSearchSuggestions([]);
-    } finally {
-      setIsLoadingSuggestions(false);
-    }
-  }, []);
 
   // Search icons from Iconify API using the proper search endpoint
   const searchIcons = useCallback(async (query: string, page: number = 1) => {
@@ -301,20 +255,6 @@ const IconsTab = memo(function IconsTab({ onIconSelect }: IconsTabProps) {
     loadPopularIcons();
   }, []);
 
-  // Debounced search suggestions
-  useEffect(() => {
-    const timeoutId = setTimeout(() => {
-      if (searchQuery.trim()) {
-        getSearchSuggestions(searchQuery);
-      } else {
-        setSearchSuggestions([]);
-        setShowSuggestions(false);
-      }
-    }, 300); // 300ms debounce
-
-    return () => clearTimeout(timeoutId);
-  }, [searchQuery, getSearchSuggestions]);
-
   // Debounced search
   useEffect(() => {
     const timeoutId = setTimeout(() => {
@@ -335,16 +275,9 @@ const IconsTab = memo(function IconsTab({ onIconSelect }: IconsTabProps) {
     onIconSelect(icon);
   };
 
-  const handleSuggestionClick = (suggestion: string) => {
-    setSearchQuery(suggestion);
-    setShowSuggestions(false);
-  };
-
   const handleClearSearch = () => {
     setSearchQuery("");
     setSearchResults([]);
-    setSearchSuggestions([]);
-    setShowSuggestions(false);
     setTotalResults(0);
     setHasMoreResults(false);
     setCurrentPage(1);
@@ -417,30 +350,6 @@ const IconsTab = memo(function IconsTab({ onIconSelect }: IconsTabProps) {
             >
               <X className="w-3 h-3" />
             </Button>
-          )}
-
-          {/* Search Suggestions */}
-          {showSuggestions && searchSuggestions.length > 0 && (
-            <div className="absolute top-full left-0 right-0 bg-white border border-gray-200 rounded-md shadow-lg z-50 mt-1 max-h-48 overflow-y-auto">
-              {isLoadingSuggestions ? (
-                <div className="p-3 text-center text-sm text-gray-500">
-                  <Loader2 className="w-4 h-4 animate-spin inline mr-2" />
-                  Loading suggestions...
-                </div>
-              ) : (
-                <div className="py-1">
-                  {searchSuggestions.map((suggestion, index) => (
-                    <button
-                      key={`${suggestion}-${index}`}
-                      className="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 focus:bg-gray-100 focus:outline-none"
-                      onClick={() => handleSuggestionClick(suggestion)}
-                    >
-                      {suggestion}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
           )}
         </div>
       </div>

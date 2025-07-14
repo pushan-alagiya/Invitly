@@ -8,7 +8,6 @@ import {
   Image as ImageIcon,
   Palette,
   FileText,
-  Save,
   Download,
   Undo,
   Redo,
@@ -54,6 +53,8 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { imagekitService } from "@/lib/imagekit-service";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 export default function TemplateCreator() {
   const [project, setProject] = useState(editorState.getProject());
@@ -72,6 +73,8 @@ export default function TemplateCreator() {
   const [dragOverPageId, setDragOverPageId] = useState<string | null>(null);
   const [editingPageName, setEditingPageName] = useState<string | null>(null);
   const [editingPageNameValue, setEditingPageNameValue] = useState("");
+  const [customWidth, setCustomWidth] = useState("");
+  const [customHeight, setCustomHeight] = useState("");
 
   const currentPage =
     project.pages.find((p) => p.id === selectedPageId) || null;
@@ -803,6 +806,93 @@ export default function TemplateCreator() {
     URL.revokeObjectURL(url);
   }, []);
 
+  const exportAsPNG = useCallback(() => {
+    const canvas = document.querySelector("canvas");
+    if (!canvas) return;
+
+    // Create a temporary canvas to handle zoom scaling
+    const tempCanvas = document.createElement("canvas");
+    const tempCtx = tempCanvas.getContext("2d");
+    if (!tempCtx) return;
+
+    // Set the size to the page dimensions
+    tempCanvas.width = currentPage?.width || 800;
+    tempCanvas.height = currentPage?.height || 600;
+
+    // Draw the canvas content scaled to fit the page dimensions
+    tempCtx.drawImage(canvas, 0, 0, tempCanvas.width, tempCanvas.height);
+
+    // Convert to PNG
+    const dataURL = tempCanvas.toDataURL("image/png");
+    const link = document.createElement("a");
+    link.download = `${currentPage?.name || "wedding-invitation"}.png`;
+    link.href = dataURL;
+    link.click();
+  }, [currentPage]);
+
+  const exportAsJPEG = useCallback(() => {
+    const canvas = document.querySelector("canvas");
+    if (!canvas) return;
+
+    // Create a temporary canvas to handle zoom scaling
+    const tempCanvas = document.createElement("canvas");
+    const tempCtx = tempCanvas.getContext("2d");
+    if (!tempCtx) return;
+
+    // Set the size to the page dimensions
+    tempCanvas.width = currentPage?.width || 800;
+    tempCanvas.height = currentPage?.height || 600;
+
+    // Draw the canvas content scaled to fit the page dimensions
+    tempCtx.drawImage(canvas, 0, 0, tempCanvas.width, tempCanvas.height);
+
+    // Convert to JPEG
+    const dataURL = tempCanvas.toDataURL("image/jpeg", 0.9);
+    const link = document.createElement("a");
+    link.download = `${currentPage?.name || "wedding-invitation"}.jpg`;
+    link.href = dataURL;
+    link.click();
+  }, [currentPage]);
+
+  const exportAsPDF = useCallback(() => {
+    const canvas = document.querySelector("canvas");
+    if (!canvas) return;
+
+    // Create a temporary canvas to handle zoom scaling
+    const tempCanvas = document.createElement("canvas");
+    const tempCtx = tempCanvas.getContext("2d");
+    if (!tempCtx) return;
+
+    // Set the size to the page dimensions
+    tempCanvas.width = currentPage?.width || 800;
+    tempCanvas.height = currentPage?.height || 600;
+
+    // Draw the canvas content scaled to fit the page dimensions
+    tempCtx.drawImage(canvas, 0, 0, tempCanvas.width, tempCanvas.height);
+
+    // Convert to PDF using jsPDF
+    import("jspdf")
+      .then(({ default: jsPDF }) => {
+        const pdf = new jsPDF({
+          orientation:
+            tempCanvas.width > tempCanvas.height ? "landscape" : "portrait",
+          unit: "px",
+          format: [tempCanvas.width, tempCanvas.height],
+        });
+
+        const imgData = tempCanvas.toDataURL("image/png");
+        pdf.addImage(imgData, "PNG", 0, 0, tempCanvas.width, tempCanvas.height);
+        pdf.save(`${currentPage?.name || "wedding-invitation"}.pdf`);
+      })
+      .catch((error) => {
+        console.error("Error loading jsPDF:", error);
+        // Fallback: show alert to user
+        alert(
+          "PDF export requires jsPDF library. Please install it or use PNG/JPEG export instead."
+        );
+      });
+  }, [currentPage]);
+
   const importProject = useCallback((file: File) => {
     const reader = new FileReader();
     reader.onload = (e) => {
@@ -905,6 +995,79 @@ export default function TemplateCreator() {
     });
   };
 
+  // Page size presets
+  const pageSizePresets = [
+    { name: "A4 Portrait", width: 794, height: 1123 },
+    { name: "A4 Landscape", width: 1123, height: 794 },
+    { name: "Letter Portrait", width: 816, height: 1056 },
+    { name: "Letter Landscape", width: 1056, height: 816 },
+    { name: "Square", width: 800, height: 800 },
+    { name: "Instagram Post", width: 1080, height: 1080 },
+    { name: "Instagram Story", width: 1080, height: 1920 },
+    { name: "Facebook Post", width: 1200, height: 630 },
+    { name: "Twitter Post", width: 1200, height: 675 },
+    { name: "Business Card", width: 350, height: 200 },
+    { name: "Invitation Card", width: 600, height: 400 },
+    { name: "Poster", width: 1200, height: 1600 },
+  ];
+
+  // Handle page size change
+  const handlePageSizeChange = (preset: string) => {
+    if (!currentPage) return;
+
+    const selectedPreset = pageSizePresets.find((p) => p.name === preset);
+    if (selectedPreset) {
+      // Get the current project from editorState to ensure we have the latest data
+      const currentProject = editorState.getProject();
+      const updatedPages = currentProject.pages.map((page) =>
+        page.id === currentPage.id
+          ? {
+              ...page,
+              width: selectedPreset.width,
+              height: selectedPreset.height,
+            }
+          : page
+      );
+
+      editorState.updateProject({
+        ...currentProject,
+        pages: updatedPages,
+      });
+    }
+  };
+
+  // Handle custom size apply
+  const handleCustomSizeApply = () => {
+    if (!currentPage || !customWidth || !customHeight) return;
+
+    const width = parseInt(customWidth);
+    const height = parseInt(customHeight);
+
+    if (isNaN(width) || isNaN(height) || width <= 0 || height <= 0) {
+      alert("Please enter valid width and height values (positive numbers)");
+      return;
+    }
+
+    if (width > 3000 || height > 3000) {
+      alert("Maximum page size is 3000x3000 pixels");
+      return;
+    }
+
+    // Get the current project from editorState to ensure we have the latest data
+    const currentProject = editorState.getProject();
+    const updatedPages = currentProject.pages.map((page) =>
+      page.id === currentPage.id ? { ...page, width, height } : page
+    );
+
+    editorState.updateProject({
+      ...currentProject,
+      pages: updatedPages,
+    });
+
+    setCustomWidth("");
+    setCustomHeight("");
+  };
+
   // Memoize sidebar components to prevent unnecessary re-renders
   const memoizedElementsTab = useMemo(
     () => (
@@ -955,9 +1118,9 @@ export default function TemplateCreator() {
   );
 
   return (
-    <div className="flex h-screen bg-gray-50">
+    <div className="flex h-screen bg-gray-50 overflow-hidden">
       {/* Left Sidebar - Tools */}
-      <div className="w-64 lg:w-80 bg-white border-r border-gray-200 flex flex-col max-h-screen">
+      <div className="w-64 lg:w-80 bg-white border-r border-gray-200 flex flex-col max-h-screen flex-shrink-0">
         {/* Header */}
         <div className="p-4 lg:p-6 border-b border-gray-200 flex-shrink-0 text-center">
           <h1 className="text-lg lg:text-xl font-bold text-gray-800 truncate">
@@ -1037,7 +1200,7 @@ export default function TemplateCreator() {
       </div>
 
       {/* Main Content */}
-      <div className="flex-1 flex flex-col relative min-w-0">
+      <div className="flex-1 flex flex-col relative min-w-0 overflow-hidden max-w-[calc(100vw-370px)]">
         {/* Top Toolbar */}
         <div className="bg-white border-b border-gray-200 p-2 lg:p-4 z-10 flex-shrink-0">
           <div className="flex items-center justify-between gap-2">
@@ -1076,6 +1239,123 @@ export default function TemplateCreator() {
             </div>
 
             <div className="flex items-center gap-1 lg:gap-2 flex-shrink-0">
+              {/* Page Size Selector */}
+              {currentPage && (
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-8 px-2 lg:px-3"
+                    >
+                      <span className="text-xs font-medium">
+                        {currentPage.width}×{currentPage.height}
+                      </span>
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-80 p-4" align="end">
+                    <div className="space-y-4">
+                      <div className="flex items-center gap-2 pb-2 border-b border-gray-200">
+                        <h3 className="font-semibold text-base">Page Size</h3>
+                        <span className="text-xs text-gray-500">
+                          {currentPage.width}×{currentPage.height}px
+                        </span>
+                      </div>
+
+                      {/* Presets */}
+                      <div className="space-y-2">
+                        <Label className="text-xs font-medium text-gray-700 uppercase tracking-wide">
+                          Common Sizes
+                        </Label>
+                        <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto">
+                          {pageSizePresets.map((preset) => (
+                            <Button
+                              key={preset.name}
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handlePageSizeChange(preset.name)}
+                              className={`max-h-12 text-xs p-4 py-6 justify-start ${
+                                currentPage.width === preset.width &&
+                                currentPage.height === preset.height
+                                  ? "bg-primary text-primary-foreground border-primary"
+                                  : ""
+                              }`}
+                            >
+                              <div className="flex flex-col items-start">
+                                <span className="font-medium">
+                                  {preset.name}
+                                </span>
+                                <span className="text-xs opacity-70">
+                                  {preset.width}×{preset.height}
+                                </span>
+                              </div>
+                            </Button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Custom Size */}
+                      <div className="space-y-2">
+                        <Label className="text-xs font-medium text-gray-700 uppercase tracking-wide">
+                          Custom Size
+                        </Label>
+                        <div className="flex items-center gap-2">
+                          <div className="flex-1">
+                            <Label
+                              htmlFor="custom-width"
+                              className="text-xs text-gray-600"
+                            >
+                              Width
+                            </Label>
+                            <Input
+                              id="custom-width"
+                              type="number"
+                              placeholder="Width"
+                              value={customWidth}
+                              onChange={(e) => setCustomWidth(e.target.value)}
+                              className="h-8 text-xs"
+                              min="1"
+                              max="3000"
+                            />
+                          </div>
+                          <div className="flex-1">
+                            <Label
+                              htmlFor="custom-height"
+                              className="text-xs text-gray-600"
+                            >
+                              Height
+                            </Label>
+                            <Input
+                              id="custom-height"
+                              type="number"
+                              placeholder="Height"
+                              value={customHeight}
+                              onChange={(e) => setCustomHeight(e.target.value)}
+                              className="h-8 text-xs"
+                              min="1"
+                              max="3000"
+                            />
+                          </div>
+                          <Button
+                            size="sm"
+                            onClick={handleCustomSizeApply}
+                            disabled={!customWidth || !customHeight}
+                            className="h-8 px-3"
+                          >
+                            Apply
+                          </Button>
+                        </div>
+                        <p className="text-xs text-gray-500">
+                          Maximum size: 3000×3000 pixels
+                        </p>
+                      </div>
+                    </div>
+                  </PopoverContent>
+                </Popover>
+              )}
+
+              <Separator orientation="vertical" className="h-8" />
+
               {/* Duplicate/Delete - only show when object is selected */}
               {(selectedObject || selectedObjectIds.length > 0) && (
                 <>
@@ -1266,7 +1546,7 @@ export default function TemplateCreator() {
                 <Layers className="w-3 h-3 lg:w-4 lg:h-4 mr-1 lg:mr-2" />
                 <span className="hidden sm:inline">Layers</span>
               </Button>
-              <Button
+              {/* <Button
                 variant="outline"
                 size="sm"
                 onClick={saveProject}
@@ -1274,22 +1554,61 @@ export default function TemplateCreator() {
               >
                 <Save className="w-3 h-3 lg:w-4 lg:h-4 mr-1 lg:mr-2" />
                 <span className="hidden sm:inline">Save</span>
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={exportProject}
-                className="h-8 px-2 lg:px-3"
-              >
-                <Download className="w-3 h-3 lg:w-4 lg:h-4 mr-1 lg:mr-2" />
-                <span className="hidden sm:inline">Export</span>
-              </Button>
+              </Button> */}
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-8 px-2 lg:px-3"
+                  >
+                    <Download className="w-3 h-3 lg:w-4 lg:h-4 mr-1 lg:mr-2" />
+                    <span className="hidden sm:inline">Export</span>
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-48 p-2" align="end">
+                  <div className="space-y-1">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={exportAsPNG}
+                      className="w-full justify-start"
+                    >
+                      PNG Image
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={exportAsJPEG}
+                      className="w-full justify-start"
+                    >
+                      JPEG Image
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={exportAsPDF}
+                      className="w-full justify-start"
+                    >
+                      PDF Document
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={exportProject}
+                      className="w-full justify-start"
+                    >
+                      JSON Project
+                    </Button>
+                  </div>
+                </PopoverContent>
+              </Popover>
             </div>
           </div>
         </div>
 
         {/* Canvas Area */}
-        <div className="flex-1 overflow-auto relative min-h-0">
+        <div className="flex-1 overflow-auto relative min-h-0 max-w-[calc(100%-318px)]">
           <div className="p-2 lg:p-6 min-h-full">
             {currentPage ? (
               <JsonCanvas
@@ -1485,7 +1804,7 @@ export default function TemplateCreator() {
 
         {/* Right Side Panels - Sticky positioning */}
         <div className="absolute top-[69px] right-0 h-full flex z-20 pointer-events-none max-h-[calc(100vh-69px)]">
-          {/* Layers Panel */}
+          {/* Layers Panel - Absolutely positioned (overlapping) */}
           {showLayers && (
             <div className="pointer-events-auto">
               <LayersPanel
@@ -1505,7 +1824,7 @@ export default function TemplateCreator() {
             </div>
           )}
 
-          {/* Properties Panel */}
+          {/* Properties Panel - Has dedicated space */}
           {selectedObject && (
             <div className="pointer-events-auto">
               <PropertiesPanel

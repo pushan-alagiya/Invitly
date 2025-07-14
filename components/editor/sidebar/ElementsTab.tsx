@@ -2,16 +2,7 @@
 
 import { Button } from "@/components/ui/button";
 import { EditorObject } from "@/lib/editor-state";
-import {
-  Type,
-  Square,
-  Save,
-  Upload,
-  Download,
-  ChevronDown,
-  ChevronRight,
-  Plus,
-} from "lucide-react";
+import { Type, Square, ChevronDown, ChevronRight, Plus } from "lucide-react";
 import { useRef, useState, memo } from "react";
 import { SHAPE_CATEGORIES, getShapesByCategory } from "@/lib/shapes-config";
 
@@ -26,21 +17,13 @@ interface ElementsTabProps {
 }
 
 const ElementsTab = memo(function ElementsTab({
-  selectedObject,
   onAddText,
   onAddShape,
-  onSave,
-  onLoad,
-  onExport,
   onImport,
 }: ElementsTabProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [expandedCategories, setExpandedCategories] = useState<string[]>([]);
   const shapesByCategory = getShapesByCategory();
-
-  const handleImport = () => {
-    fileInputRef.current?.click();
-  };
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -166,16 +149,16 @@ const ElementsTab = memo(function ElementsTab({
       </div>
 
       {/* Selected Object Actions */}
-      {selectedObject && (
+      {/* {selectedObject && (
         <div className="space-y-2 lg:space-y-3">
           <h3 className="text-sm lg:text-base font-semibold text-gray-700">
             Selected: {selectedObject.type}
           </h3>
         </div>
-      )}
+      )} */}
 
       {/* Project Management */}
-      {selectedObject && (
+      {/* {selectedObject && (
         <div className="space-y-2 lg:space-y-3 pt-2 lg:pt-4 border-t border-gray-200">
           <h3 className="text-sm lg:text-base font-semibold text-gray-700">
             Project
@@ -219,7 +202,7 @@ const ElementsTab = memo(function ElementsTab({
             </div>
           </div>
         </div>
-      )}
+      )} */}
 
       {/* Hidden file input for import */}
       <input
