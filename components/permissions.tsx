@@ -19,16 +19,7 @@ const notAllowedRoutes: { [key: string]: string[] } = {
   PHOTOGRAPHER: [],
   VENDOR: [],
   PREMIUM_USER: [],
-  Unauthenticated: [
-    "/report",
-    "/dashboard",
-    "/channel-partners",
-    "/users",
-    "/promos",
-    "/orders",
-    "/payment",
-    "/billing",
-  ], // Block for unauthenticated users
+  Unauthenticated: ["/dashboard", "/projects"], // Block for unauthenticated users
 };
 
 const Permission = ({ children }: PermissionProps) => {

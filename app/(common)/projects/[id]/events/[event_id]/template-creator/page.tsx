@@ -75,6 +75,7 @@ export default function TemplateCreator() {
   const [editingPageNameValue, setEditingPageNameValue] = useState("");
   const [customWidth, setCustomWidth] = useState("");
   const [customHeight, setCustomHeight] = useState("");
+  const [forceCanvasUpdate, setForceCanvasUpdate] = useState(0);
 
   const currentPage =
     project.pages.find((p) => p.id === selectedPageId) || null;
@@ -320,30 +321,36 @@ export default function TemplateCreator() {
 
       const isCtrlOrCmd = e.ctrlKey || e.metaKey;
       const isShift = e.shiftKey;
+      const key = e.key.toLowerCase();
+
+      // Only handle specific shortcuts, let others pass through
+      let handled = false;
 
       // Text formatting shortcuts (only when a text object is selected)
       if (selectedObject && selectedObject.type === "text") {
-        switch (e.key.toLowerCase()) {
-          case "b":
-            if (isCtrlOrCmd) {
+        if (isCtrlOrCmd) {
+          switch (key) {
+            case "b":
               e.preventDefault();
               const newWeight =
                 selectedObject.fontWeight === "bold" ? "normal" : "bold";
               updateObjectField("fontWeight", newWeight);
               handleFieldBlur();
-            }
-            break;
-          case "i":
-            if (isCtrlOrCmd) {
+              handled = true;
+              // Force immediate canvas update
+              setForceCanvasUpdate((prev) => prev + 1);
+              break;
+            case "i":
               e.preventDefault();
               const newStyle =
                 selectedObject.fontStyle === "italic" ? "normal" : "italic";
               updateObjectField("fontStyle", newStyle);
               handleFieldBlur();
-            }
-            break;
-          case "u":
-            if (isCtrlOrCmd) {
+              handled = true;
+              // Force immediate canvas update
+              setForceCanvasUpdate((prev) => prev + 1);
+              break;
+            case "u":
               e.preventDefault();
               const newDecoration =
                 selectedObject.textDecoration === "underline"
@@ -351,124 +358,146 @@ export default function TemplateCreator() {
                   : "underline";
               updateObjectField("textDecoration", newDecoration);
               handleFieldBlur();
-            }
-            break;
-          case "l":
-            if (isCtrlOrCmd) {
+              handled = true;
+              // Force immediate canvas update
+              setForceCanvasUpdate((prev) => prev + 1);
+              break;
+            case "l":
               e.preventDefault();
               updateObjectField("textAlign", "left");
               handleFieldBlur();
-            }
-            break;
-          case "e":
-            if (isCtrlOrCmd) {
+              handled = true;
+              // Force immediate canvas update
+              setForceCanvasUpdate((prev) => prev + 1);
+              break;
+            case "e":
               e.preventDefault();
               updateObjectField("textAlign", "center");
               handleFieldBlur();
-            }
-            break;
-          case "r":
-            if (isCtrlOrCmd) {
+              handled = true;
+              // Force immediate canvas update
+              setForceCanvasUpdate((prev) => prev + 1);
+              break;
+            case "r":
               e.preventDefault();
               updateObjectField("textAlign", "right");
               handleFieldBlur();
-            }
-            break;
-          case "j":
-            if (isCtrlOrCmd) {
+              handled = true;
+              // Force immediate canvas update
+              setForceCanvasUpdate((prev) => prev + 1);
+              break;
+            case "j":
               e.preventDefault();
               updateObjectField("textAlign", "justify");
               handleFieldBlur();
-            }
-            break;
+              handled = true;
+              // Force immediate canvas update
+              setForceCanvasUpdate((prev) => prev + 1);
+              break;
+          }
         }
       }
 
       // General shortcuts
-      switch (e.key.toLowerCase()) {
-        case "delete":
-          if (selectedObjectIds.length > 0) {
-            // Delete multiple objects
-            selectedObjectIds.forEach((id) => {
-              editorState.deleteObject(id);
-            });
-            setSelectedObjectIds([]);
-          } else if (selectedObjectId) {
-            // Delete single object
-            editorState.deleteObject(selectedObjectId);
-          }
-          break;
-        case "d":
-          if (isCtrlOrCmd) {
-            e.preventDefault();
-            duplicateObject();
-          }
-          break;
-        case "c":
-          if (isCtrlOrCmd) {
-            e.preventDefault();
-            copyObject();
-          }
-          break;
-        case "v":
-          if (isCtrlOrCmd) {
-            e.preventDefault();
-            handlePaste();
-          }
-          break;
-        case "z":
-          if (isCtrlOrCmd && !isShift) {
-            e.preventDefault();
-            handleUndo();
-          } else if (isCtrlOrCmd && isShift) {
-            e.preventDefault();
-            handleRedo();
-          }
-          break;
-        case "y":
-          if (isCtrlOrCmd) {
-            e.preventDefault();
-            handleRedo();
-          }
-          break;
-        case "s":
-          if (isCtrlOrCmd) {
-            e.preventDefault();
-            saveProject();
-          }
-          break;
-        case "equal":
-        case "+":
-          if (isCtrlOrCmd) {
-            e.preventDefault();
-            handleZoomIn();
-          }
-          break;
-        case "minus":
-        case "_":
-          if (isCtrlOrCmd) {
-            e.preventDefault();
-            handleZoomOut();
-          }
-          break;
-        case "0":
-          if (isCtrlOrCmd) {
-            e.preventDefault();
-            setZoomLevel(1);
-          }
-          break;
-        case "g":
-          if (isCtrlOrCmd) {
-            e.preventDefault();
-            toggleGrid();
-          }
-          break;
-        case "h":
-          if (isCtrlOrCmd) {
-            e.preventDefault();
-            setShowLayers(!showLayers);
-          }
-          break;
+      if (!handled) {
+        switch (key) {
+          case "delete":
+            if (selectedObjectIds.length > 0) {
+              // Delete multiple objects
+              selectedObjectIds.forEach((id) => {
+                editorState.deleteObject(id);
+              });
+              setSelectedObjectIds([]);
+            } else if (selectedObjectId) {
+              // Delete single object
+              editorState.deleteObject(selectedObjectId);
+            }
+            handled = true;
+            break;
+          case "d":
+            if (isCtrlOrCmd) {
+              e.preventDefault();
+              duplicateObject();
+              handled = true;
+            }
+            break;
+          case "c":
+            if (isCtrlOrCmd) {
+              e.preventDefault();
+              copyObject();
+              handled = true;
+            }
+            break;
+          case "v":
+            if (isCtrlOrCmd) {
+              e.preventDefault();
+              handlePaste();
+              handled = true;
+            }
+            break;
+          case "z":
+            if (isCtrlOrCmd && !isShift) {
+              e.preventDefault();
+              handleUndo();
+              handled = true;
+            } else if (isCtrlOrCmd && isShift) {
+              e.preventDefault();
+              handleRedo();
+              handled = true;
+            }
+            break;
+          case "y":
+            if (isCtrlOrCmd) {
+              e.preventDefault();
+              handleRedo();
+              handled = true;
+            }
+            break;
+          case "s":
+            if (isCtrlOrCmd) {
+              e.preventDefault();
+              saveProject();
+              handled = true;
+            }
+            break;
+          case "equal":
+          case "+":
+            if (isCtrlOrCmd) {
+              e.preventDefault();
+              handleZoomIn();
+              handled = true;
+            }
+            break;
+          case "minus":
+          case "_":
+            if (isCtrlOrCmd) {
+              e.preventDefault();
+              handleZoomOut();
+              handled = true;
+            }
+            break;
+          case "0":
+            if (isCtrlOrCmd) {
+              e.preventDefault();
+              setZoomLevel(1);
+              handled = true;
+            }
+            break;
+          case "g":
+            if (isCtrlOrCmd) {
+              e.preventDefault();
+              toggleGrid();
+              handled = true;
+            }
+            break;
+          case "h":
+            if (isCtrlOrCmd) {
+              e.preventDefault();
+              setShowLayers(!showLayers);
+              handled = true;
+            }
+            break;
+        }
       }
     };
 
@@ -953,11 +982,14 @@ export default function TemplateCreator() {
 
     // Force a re-render by updating the project state
     setProject(editorState.getProject());
+
+    // Force immediate canvas update
+    setForceCanvasUpdate((prev) => prev + 1);
   };
 
   const handleFieldBlur = () => {
-    // This function is no longer needed since we're using updateObject directly
-    // But keeping it for backward compatibility
+    // Force immediate canvas update when fields lose focus
+    setForceCanvasUpdate((prev) => prev + 1);
   };
 
   // Layer actions for specific objects
@@ -1239,6 +1271,43 @@ export default function TemplateCreator() {
             </div>
 
             <div className="flex items-center gap-1 lg:gap-2 flex-shrink-0">
+              {/* Duplicate/Delete - only show when object is selected */}
+              {(selectedObject || selectedObjectIds.length > 0) && (
+                <>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={duplicateObject}
+                    className="h-8 px-2 lg:px-3"
+                  >
+                    <Copy className="w-3 h-3 lg:w-4 lg:h-4 " />
+                    {/* <span className="hidden sm:inline">Duplicate</span> */}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      if (selectedObjectIds.length > 0) {
+                        // Delete multiple objects
+                        selectedObjectIds.forEach((id) => {
+                          editorState.deleteObject(id);
+                        });
+                        setSelectedObjectIds([]);
+                      } else if (selectedObjectId) {
+                        // Delete single object
+                        editorState.deleteObject(selectedObjectId);
+                      }
+                    }}
+                    className="h-8 px-2 lg:px-3 text-red-600 hover:text-red-700 hover:bg-red-50"
+                  >
+                    <Trash2 className="w-3 h-3 lg:w-4 lg:h-4 " />
+                    {/* <span className="hidden sm:inline">Delete</span> */}
+                  </Button>
+                </>
+              )}
+
+              <Separator orientation="vertical" className="h-8" />
+
               {/* Page Size Selector */}
               {currentPage && (
                 <Popover>
@@ -1352,43 +1421,6 @@ export default function TemplateCreator() {
                     </div>
                   </PopoverContent>
                 </Popover>
-              )}
-
-              <Separator orientation="vertical" className="h-8" />
-
-              {/* Duplicate/Delete - only show when object is selected */}
-              {(selectedObject || selectedObjectIds.length > 0) && (
-                <>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={duplicateObject}
-                    className="h-8 px-2 lg:px-3"
-                  >
-                    <Copy className="w-3 h-3 lg:w-4 lg:h-4 " />
-                    {/* <span className="hidden sm:inline">Duplicate</span> */}
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      if (selectedObjectIds.length > 0) {
-                        // Delete multiple objects
-                        selectedObjectIds.forEach((id) => {
-                          editorState.deleteObject(id);
-                        });
-                        setSelectedObjectIds([]);
-                      } else if (selectedObjectId) {
-                        // Delete single object
-                        editorState.deleteObject(selectedObjectId);
-                      }
-                    }}
-                    className="h-8 px-2 lg:px-3 text-red-600 hover:text-red-700 hover:bg-red-50"
-                  >
-                    <Trash2 className="w-3 h-3 lg:w-4 lg:h-4 " />
-                    {/* <span className="hidden sm:inline">Delete</span> */}
-                  </Button>
-                </>
               )}
 
               <Separator orientation="vertical" className="h-8" />
@@ -1618,6 +1650,7 @@ export default function TemplateCreator() {
                 showGrid={showGrid}
                 showRuler={showRuler}
                 zoomLevel={zoomLevel}
+                forceCanvasUpdate={forceCanvasUpdate}
               />
             ) : (
               <div className="flex items-center justify-center h-full">
@@ -1832,10 +1865,15 @@ export default function TemplateCreator() {
                 selectedObjectId={selectedObjectId}
                 onUpdateObjectField={updateObjectField}
                 onFieldBlur={handleFieldBlur}
-                onUpdateObject={(objectId, updates) =>
-                  editorState.updateObject(objectId, updates)
-                }
-                onForceRender={() => {}}
+                onUpdateObject={(objectId, updates) => {
+                  editorState.updateObject(objectId, updates);
+                  // Force immediate canvas update
+                  setForceCanvasUpdate((prev) => prev + 1);
+                }}
+                onForceRender={() => {
+                  // Force immediate canvas update
+                  setForceCanvasUpdate((prev) => prev + 1);
+                }}
               />
             </div>
           )}

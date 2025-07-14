@@ -11,6 +11,7 @@ interface JsonCanvasProps {
   showGrid?: boolean;
   showRuler?: boolean;
   zoomLevel?: number;
+  forceCanvasUpdate?: number;
 }
 
 // Interface for Fabric.js objects with our custom data property
@@ -36,6 +37,7 @@ export default function JsonCanvas({
   showGrid = false,
   showRuler = false,
   zoomLevel = 1,
+  forceCanvasUpdate,
 }: JsonCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fabricCanvasRef = useRef<fabric.Canvas | null>(null);
@@ -78,8 +80,8 @@ export default function JsonCanvas({
   const deleteControl = new fabric.Control({
     x: 0.5,
     y: -0.5,
-    offsetY: -10,
-    offsetX: 10,
+    offsetY: -15,
+    offsetX: 15,
     cursorStyleHandler: () => "pointer",
     mouseUpHandler: (eventData, transform) => {
       const target = transform.target as FabricObjectWithData;
@@ -132,8 +134,56 @@ export default function JsonCanvas({
 
       ctx.restore();
     },
-    actionHandler: fabric.controlsUtils.scalingEqually,
-    actionName: "delete",
+  });
+
+  // Create duplicate control
+  const duplicateControl = new fabric.Control({
+    x: -0.5,
+    y: -0.5,
+    offsetY: -15,
+    offsetX: -15,
+    cursorStyleHandler: () => "pointer",
+    mouseUpHandler: (eventData, transform) => {
+      const target = transform.target as FabricObjectWithData;
+      const canvas = fabricCanvasRef.current;
+      if (!canvas) return true;
+
+      const activeSelection = canvas.getActiveObjects();
+      if (activeSelection && activeSelection.length > 1) {
+        activeSelection.forEach((obj) => {
+          const fabricObj = obj as FabricObjectWithData;
+          if (fabricObj?.data?.objectId) {
+            editorState.duplicateObject(fabricObj.data.objectId);
+          }
+        });
+      } else if (target?.data?.objectId) {
+        editorState.duplicateObject(target.data.objectId);
+      }
+      return true;
+    },
+    render: (ctx, left, top, styleOverride, fabricObject) => {
+      const size = 20;
+      ctx.save();
+      ctx.translate(left, top);
+      ctx.rotate(fabric.util.degreesToRadians(fabricObject.angle || 0));
+
+      ctx.fillStyle = "#3b82f6";
+      ctx.beginPath();
+      ctx.arc(0, 0, size / 2, 0, 2 * Math.PI);
+      ctx.fill();
+
+      ctx.strokeStyle = "#ffffff";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      // Draw a plus sign
+      ctx.moveTo(0, -6);
+      ctx.lineTo(0, 6);
+      ctx.moveTo(-6, 0);
+      ctx.lineTo(6, 0);
+      ctx.stroke();
+
+      ctx.restore();
+    },
   });
 
   // Function to draw grid
@@ -304,6 +354,13 @@ export default function JsonCanvas({
         }) as FabricObjectWithData;
     }
 
+    // Ensure delete control is applied to this object
+    fabricObject.controls = {
+      ...fabricObject.controls,
+      delete: deleteControl,
+      duplicate: duplicateControl,
+    };
+
     fabricObject.data = { objectId: obj.id };
     return fabricObject;
   };
@@ -414,6 +471,13 @@ export default function JsonCanvas({
       });
     }
 
+    // Ensure delete control is applied to this object
+    fabricObject.controls = {
+      ...fabricObject.controls,
+      delete: deleteControl,
+      duplicate: duplicateControl,
+    };
+
     fabricObject.data = { objectId: obj.id };
     return fabricObject;
   };
@@ -476,6 +540,13 @@ export default function JsonCanvas({
         fabricObject.iconName = obj.iconName;
         fabricObject.iconPrefix = obj.iconPrefix;
 
+        // Ensure delete control is applied to this object
+        fabricObject.controls = {
+          ...fabricObject.controls,
+          delete: deleteControl,
+          duplicate: duplicateControl,
+        };
+
         console.log("Icon object created successfully:", fabricObject);
         resolve(fabricObject);
 
@@ -493,6 +564,13 @@ export default function JsonCanvas({
             scaleX: obj.scaleX || 1,
             scaleY: obj.scaleY || 1,
           }) as FabricObjectWithData;
+
+          // Ensure delete control is applied to this object
+          fabricObject.controls = {
+            ...fabricObject.controls,
+            delete: deleteControl,
+            duplicate: duplicateControl,
+          };
 
           fabricObject.data = { objectId: obj.id };
           fabricObject.iconSvg = obj.iconSvg;
@@ -515,6 +593,13 @@ export default function JsonCanvas({
           scaleX: obj.scaleX || 1,
           scaleY: obj.scaleY || 1,
         }) as FabricObjectWithData;
+
+        // Ensure delete control is applied to this object
+        fabricObject.controls = {
+          ...fabricObject.controls,
+          delete: deleteControl,
+          duplicate: duplicateControl,
+        };
 
         fabricObject.data = { objectId: obj.id };
         fabricObject.iconSvg = obj.iconSvg;
@@ -554,6 +639,13 @@ export default function JsonCanvas({
             scaleY: obj.scaleY || 1,
           }) as FabricObjectWithData;
 
+          // Ensure delete control is applied to this object
+          fabricObject.controls = {
+            ...fabricObject.controls,
+            delete: deleteControl,
+            duplicate: duplicateControl,
+          };
+
           fabricObject.data = { objectId: obj.id };
           resolve(fabricObject);
         } catch (error) {
@@ -582,6 +674,13 @@ export default function JsonCanvas({
               scaleX: obj.scaleX || 1,
               scaleY: obj.scaleY || 1,
             }) as FabricObjectWithData;
+
+            // Ensure delete control is applied to this object
+            fabricObject.controls = {
+              ...fabricObject.controls,
+              delete: deleteControl,
+              duplicate: duplicateControl,
+            };
 
             fabricObject.data = { objectId: obj.id };
             resolve(fabricObject);
@@ -615,6 +714,13 @@ export default function JsonCanvas({
           strokeWidth: 2,
         }) as FabricObjectWithData;
 
+        // Ensure delete control is applied to this object
+        fallbackObject.controls = {
+          ...fallbackObject.controls,
+          delete: deleteControl,
+          duplicate: duplicateControl,
+        };
+
         fallbackObject.data = { objectId: obj.id };
 
         // Add error text
@@ -631,6 +737,13 @@ export default function JsonCanvas({
           left: obj.left || 0,
           top: obj.top || 0,
         }) as FabricObjectWithData;
+
+        // Ensure delete control is applied to this group
+        group.controls = {
+          ...group.controls,
+          delete: deleteControl,
+          duplicate: duplicateControl,
+        };
 
         group.data = { objectId: obj.id };
         resolve(group);
@@ -767,22 +880,84 @@ export default function JsonCanvas({
         break;
 
       case "shape":
-        const shapeUpdates: Partial<fabric.Object> = {
-          fill: obj.fill || "#3B82F6",
-          stroke: obj.stroke || "#000000",
-          strokeWidth: obj.strokeWidth || 0,
-          opacity: obj.opacity || 1,
-          angle: obj.angle || 0,
-          scaleX: obj.scaleX || 1,
-          scaleY: obj.scaleY || 1,
+        // Check if the shape type has changed
+        const currentShapeType = fabricObject.type;
+        const newShapeType = obj.shapeType || "rect";
+
+        // Map our shapeType values to Fabric.js types
+        const getFabricShapeType = (shapeType: string) => {
+          switch (shapeType) {
+            case "circle":
+              return "circle";
+            case "triangle":
+              return "triangle";
+            case "rect":
+            default:
+              return "rect";
+          }
         };
 
-        if (obj.shapeType === "rect") {
-          (shapeUpdates as fabric.Rect).rx = obj.cornerRadius || 0;
-          (shapeUpdates as fabric.Rect).ry = obj.cornerRadius || 0;
-        }
+        const expectedFabricType = getFabricShapeType(newShapeType);
 
-        fabricObject.set(shapeUpdates);
+        if (currentShapeType !== expectedFabricType) {
+          // Shape type changed, recreate the object
+          console.log("Shape type changed, recreating shape:", newShapeType);
+
+          // Store current selection state
+          const wasSelected = canvas.getActiveObject() === fabricObject;
+          const wasInSelection = canvas
+            .getActiveObjects()
+            .includes(fabricObject);
+
+          // Remove the old shape object
+          canvas.remove(fabricObject);
+          fabricObjectsRef.current.delete(obj.id);
+
+          // Create new shape object
+          const newShapeObject = createShapeObject(obj);
+          if (newShapeObject) {
+            canvas.add(newShapeObject);
+            fabricObjectsRef.current.set(obj.id, newShapeObject);
+
+            // Restore selection state
+            if (wasSelected) {
+              canvas.setActiveObject(newShapeObject);
+            } else if (wasInSelection) {
+              // If it was part of a multi-selection, we need to rebuild the selection
+              const currentSelection = canvas.getActiveObjects();
+              const newSelection = new fabric.ActiveSelection(
+                [...currentSelection, newShapeObject],
+                {
+                  canvas: canvas,
+                }
+              );
+              canvas.setActiveObject(newSelection);
+            }
+
+            canvas.renderAll();
+          }
+        } else {
+          // Only update properties if shape type hasn't changed
+          const shapeUpdates: Partial<fabric.Object> = {
+            fill: obj.fill || "#3B82F6",
+            stroke: obj.stroke || "#000000",
+            strokeWidth: obj.strokeWidth || 0,
+            opacity: obj.opacity || 1,
+            angle: obj.angle || 0,
+            scaleX: obj.scaleX || 1,
+            scaleY: obj.scaleY || 1,
+          };
+
+          if (obj.shapeType === "rect") {
+            (shapeUpdates as fabric.Rect).rx = obj.cornerRadius || 0;
+            (shapeUpdates as fabric.Rect).ry = obj.cornerRadius || 0;
+          }
+
+          fabricObject.set(shapeUpdates);
+
+          // Force immediate re-render for shapes
+          canvas.requestRenderAll();
+        }
         break;
 
       case "icon":
@@ -796,6 +971,9 @@ export default function JsonCanvas({
         };
 
         fabricObject.set(iconUpdates);
+
+        // Force immediate re-render for icons
+        canvas.requestRenderAll();
         break;
 
       case "image":
@@ -824,6 +1002,9 @@ export default function JsonCanvas({
             scaleY: obj.scaleY || 1,
           };
           fabricObject.set(imageUpdates);
+
+          // Force immediate re-render for images
+          canvas.requestRenderAll();
         }
         break;
     }
@@ -850,6 +1031,7 @@ export default function JsonCanvas({
     fabric.Object.prototype.controls = {
       ...fabric.Object.prototype.controls,
       delete: deleteControl,
+      duplicate: duplicateControl,
     };
 
     // Event handlers
@@ -1456,7 +1638,7 @@ export default function JsonCanvas({
         }
       }
 
-      // Add new objects
+      // Add new objects and update existing ones
       for (const obj of page.objects) {
         let fabricObject = fabricObjects.get(obj.id);
 
@@ -1534,6 +1716,20 @@ export default function JsonCanvas({
     // Update grid and ruler
     updateGridAndRuler();
   }, [page.objects, updateObject]);
+
+  // Force immediate updates when object properties change
+  useEffect(() => {
+    const canvas = fabricCanvasRef.current;
+    if (!canvas) return;
+
+    // Update all existing objects with their latest properties
+    for (const obj of page.objects) {
+      const fabricObject = fabricObjectsRef.current.get(obj.id);
+      if (fabricObject) {
+        updateObject(obj);
+      }
+    }
+  }, [page.objects, updateObject, forceCanvasUpdate]);
 
   // Handle onObjectSelect callback changes
   useEffect(() => {
