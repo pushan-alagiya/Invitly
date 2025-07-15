@@ -1748,6 +1748,22 @@ export default function JsonCanvas({
       const canvas = fabricCanvasRef.current;
       if (!canvas) return;
 
+      // Check if user is editing text in an input field
+      const activeElement = document.activeElement;
+      const isEditingText =
+        activeElement &&
+        (activeElement.tagName === "INPUT" ||
+          activeElement.tagName === "TEXTAREA" ||
+          (activeElement as HTMLElement).contentEditable === "true");
+
+      // If user is editing text in an input field, don't handle arrow keys
+      if (
+        isEditingText &&
+        ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(e.key)
+      ) {
+        return;
+      }
+
       const activeObject = canvas.getActiveObject();
       if (!activeObject) return;
 
