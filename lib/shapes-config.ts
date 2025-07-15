@@ -160,24 +160,9 @@ export const SHAPES_CONFIG: ShapeConfig[] = [
     category: "Lines",
     color: "#6B7280",
   },
-
-  // Decorative
-  {
-    type: "cloud",
-    name: "Cloud",
-    icon: "☁",
-    category: "Decorative",
-    color: "#93C5FD",
-  },
 ];
 
-export const SHAPE_CATEGORIES = [
-  "Basic",
-  "Polygons",
-  "Arrows",
-  "Lines",
-  "Decorative",
-];
+export const SHAPE_CATEGORIES = ["Basic", "Polygons", "Arrows", "Lines"];
 
 export function getShapesByCategory() {
   const shapesByCategory: Record<string, ShapeConfig[]> = {};

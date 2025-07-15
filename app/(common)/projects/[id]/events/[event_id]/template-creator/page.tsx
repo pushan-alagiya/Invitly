@@ -613,7 +613,7 @@ export default function TemplateCreator() {
     );
   };
 
-  // Keyboard shortcuts handler
+  // Keyboard shortcuts handler (only for global shortcuts, not arrow keys)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       // Don't handle shortcuts if user is typing in an input field
@@ -703,7 +703,7 @@ export default function TemplateCreator() {
         }
       }
 
-      // General shortcuts
+      // General shortcuts (no arrow keys - those are handled by canvas)
       if (!handled) {
         switch (key) {
           case "delete":
@@ -814,6 +814,7 @@ export default function TemplateCreator() {
     showGrid,
     showLayers,
     selectedObjectIds,
+    currentPage,
   ]);
 
   // Keyboard shortcuts data for help popover
@@ -828,6 +829,16 @@ export default function TemplateCreator() {
         { key: "Ctrl/Cmd + E", description: "Align Center" },
         { key: "Ctrl/Cmd + R", description: "Align Right" },
         { key: "Ctrl/Cmd + J", description: "Justify" },
+      ],
+    },
+    {
+      category: "Object Movement",
+      shortcuts: [
+        { key: "↑", description: "Move Up" },
+        { key: "↓", description: "Move Down" },
+        { key: "←", description: "Move Left" },
+        { key: "→", description: "Move Right" },
+        { key: "Shift + Arrow", description: "Move by 10px" },
       ],
     },
     {

@@ -498,7 +498,7 @@ export default function ImageProperties({
   const getImageUrl = () => {
     if (selectedObject && selectedObject.type === "image") {
       const url = selectedObject.imageUrl || "";
-      console.log("Current selected image URL:", url);
+      // console.log("Current selected image URL:", url); // Commented out to reduce console spam
       return url;
     }
     return "";

@@ -320,6 +320,43 @@ export default function JsonCanvas({
         }) as FabricObjectWithData;
         break;
 
+      case "square":
+        fabricObject = new fabric.Rect({
+          left: obj.left || 0,
+          top: obj.top || 0,
+          width: obj.width || 100,
+          height: obj.height || 100,
+          fill: obj.fill || "#10B981",
+          stroke: obj.stroke || "#000000",
+          strokeWidth: obj.strokeWidth || 0,
+          rx: obj.cornerRadius || 0,
+          ry: obj.cornerRadius || 0,
+          opacity: obj.opacity || 1,
+          angle: obj.angle || 0,
+          scaleX: obj.scaleX || 1,
+          scaleY: obj.scaleY || 1,
+        }) as FabricObjectWithData;
+        break;
+
+      case "oval":
+        fabricObject = new fabric.Ellipse({
+          left: obj.left || 0,
+          top: obj.top || 0,
+          rx: (obj.width || 100) / 2,
+          ry: (obj.height || 100) / 2,
+          fill: obj.fill || "#8B5CF6",
+          stroke: obj.stroke || "#000000",
+          strokeWidth: obj.strokeWidth || 0,
+          opacity: obj.opacity || 1,
+          angle: obj.angle || 0,
+          scaleX: obj.scaleX || 1,
+          scaleY: obj.scaleY || 1,
+          objectCaching: false,
+          originX: "center",
+          originY: "center",
+        }) as FabricObjectWithData;
+        break;
+
       case "triangle":
         fabricObject = new fabric.Triangle({
           left: obj.left || 0,
@@ -336,7 +373,387 @@ export default function JsonCanvas({
         }) as FabricObjectWithData;
         break;
 
+      case "diamond":
+        // Create diamond using a polygon
+        const diamondPoints = [
+          { x: 0, y: -50 }, // top
+          { x: 50, y: 0 }, // right
+          { x: 0, y: 50 }, // bottom
+          { x: -50, y: 0 }, // left
+        ];
+        fabricObject = new fabric.Polygon(diamondPoints, {
+          left: obj.left || 0,
+          top: obj.top || 0,
+          width: obj.width || 100,
+          height: obj.height || 100,
+          fill: obj.fill || "#EC4899",
+          stroke: obj.stroke || "#000000",
+          strokeWidth: obj.strokeWidth || 0,
+          opacity: obj.opacity || 1,
+          angle: obj.angle || 0,
+          scaleX: obj.scaleX || 1,
+          scaleY: obj.scaleY || 1,
+          objectCaching: false,
+          originX: "center",
+          originY: "center",
+        }) as FabricObjectWithData;
+        break;
+
+      case "pentagon":
+        const pentagonPoints = [];
+        for (let i = 0; i < 5; i++) {
+          const angle = (i * 72 - 90) * (Math.PI / 180);
+          pentagonPoints.push({
+            x: 50 * Math.cos(angle),
+            y: 50 * Math.sin(angle),
+          });
+        }
+        fabricObject = new fabric.Polygon(pentagonPoints, {
+          left: obj.left || 0,
+          top: obj.top || 0,
+          width: obj.width || 100,
+          height: obj.height || 100,
+          fill: obj.fill || "#F97316",
+          stroke: obj.stroke || "#000000",
+          strokeWidth: obj.strokeWidth || 0,
+          opacity: obj.opacity || 1,
+          angle: obj.angle || 0,
+          scaleX: obj.scaleX || 1,
+          scaleY: obj.scaleY || 1,
+          objectCaching: false,
+          originX: "center",
+          originY: "center",
+        }) as FabricObjectWithData;
+        break;
+
+      case "hexagon":
+        const hexagonPoints = [];
+        for (let i = 0; i < 6; i++) {
+          const angle = (i * 60 - 90) * (Math.PI / 180);
+          hexagonPoints.push({
+            x: 50 * Math.cos(angle),
+            y: 50 * Math.sin(angle),
+          });
+        }
+        fabricObject = new fabric.Polygon(hexagonPoints, {
+          left: obj.left || 0,
+          top: obj.top || 0,
+          width: obj.width || 100,
+          height: obj.height || 100,
+          fill: obj.fill || "#6366F1",
+          stroke: obj.stroke || "#000000",
+          strokeWidth: obj.strokeWidth || 0,
+          opacity: obj.opacity || 1,
+          angle: obj.angle || 0,
+          scaleX: obj.scaleX || 1,
+          scaleY: obj.scaleY || 1,
+          objectCaching: false,
+          originX: "center",
+          originY: "center",
+        }) as FabricObjectWithData;
+        break;
+
+      case "octagon":
+        const octagonPoints = [];
+        for (let i = 0; i < 8; i++) {
+          const angle = (i * 45 - 90) * (Math.PI / 180);
+          octagonPoints.push({
+            x: 50 * Math.cos(angle),
+            y: 50 * Math.sin(angle),
+          });
+        }
+        fabricObject = new fabric.Polygon(octagonPoints, {
+          left: obj.left || 0,
+          top: obj.top || 0,
+          width: obj.width || 100,
+          height: obj.height || 100,
+          fill: obj.fill || "#A855F7",
+          stroke: obj.stroke || "#000000",
+          strokeWidth: obj.strokeWidth || 0,
+          opacity: obj.opacity || 1,
+          angle: obj.angle || 0,
+          scaleX: obj.scaleX || 1,
+          scaleY: obj.scaleY || 1,
+          objectCaching: false,
+          originX: "center",
+          originY: "center",
+        }) as FabricObjectWithData;
+        break;
+
+      case "star":
+        const starPoints = [];
+        for (let i = 0; i < 10; i++) {
+          const angle = (i * 36 - 90) * (Math.PI / 180);
+          const radius = i % 2 === 0 ? 50 : 25;
+          starPoints.push({
+            x: radius * Math.cos(angle),
+            y: radius * Math.sin(angle),
+          });
+        }
+        fabricObject = new fabric.Polygon(starPoints, {
+          left: obj.left || 0,
+          top: obj.top || 0,
+          width: obj.width || 100,
+          height: obj.height || 100,
+          fill: obj.fill || "#FCD34D",
+          stroke: obj.stroke || "#000000",
+          strokeWidth: obj.strokeWidth || 0,
+          opacity: obj.opacity || 1,
+          angle: obj.angle || 0,
+          scaleX: obj.scaleX || 1,
+          scaleY: obj.scaleY || 1,
+          objectCaching: false,
+          originX: "center",
+          originY: "center",
+        }) as FabricObjectWithData;
+        break;
+
+      case "cross":
+        // Create cross using a polygon
+        const crossPoints = [
+          { x: -30, y: -10 },
+          { x: -10, y: -10 },
+          { x: -10, y: -30 },
+          { x: 10, y: -30 },
+          { x: 10, y: -10 },
+          { x: 30, y: -10 },
+          { x: 30, y: 10 },
+          { x: 10, y: 10 },
+          { x: 10, y: 30 },
+          { x: -10, y: 30 },
+          { x: -10, y: 10 },
+          { x: -30, y: 10 },
+        ];
+        fabricObject = new fabric.Polygon(crossPoints, {
+          left: obj.left || 0,
+          top: obj.top || 0,
+          width: obj.width || 100,
+          height: obj.height || 100,
+          fill: obj.fill || "#DC2626",
+          stroke: obj.stroke || "#000000",
+          strokeWidth: obj.strokeWidth || 0,
+          opacity: obj.opacity || 1,
+          angle: obj.angle || 0,
+          scaleX: obj.scaleX || 1,
+          scaleY: obj.scaleY || 1,
+          objectCaching: false,
+          originX: "center",
+          originY: "center",
+        }) as FabricObjectWithData;
+        break;
+
+      case "arrow-right":
+        const arrowRightPoints = [
+          { x: -50, y: -20 },
+          { x: 0, y: -20 },
+          { x: 0, y: -30 },
+          { x: 50, y: 0 },
+          { x: 0, y: 30 },
+          { x: 0, y: 20 },
+          { x: -50, y: 20 },
+        ];
+        fabricObject = new fabric.Polygon(arrowRightPoints, {
+          left: obj.left || 0,
+          top: obj.top || 0,
+          width: obj.width || 100,
+          height: obj.height || 100,
+          fill: obj.fill || "#DC2626",
+          stroke: obj.stroke || "#000000",
+          strokeWidth: obj.strokeWidth || 0,
+          opacity: obj.opacity || 1,
+          angle: obj.angle || 0,
+          scaleX: obj.scaleX || 1,
+          scaleY: obj.scaleY || 1,
+          objectCaching: false,
+          originX: "center",
+          originY: "center",
+        }) as FabricObjectWithData;
+        break;
+
+      case "arrow-left":
+        const arrowLeftPoints = [
+          { x: 50, y: -20 },
+          { x: 0, y: -20 },
+          { x: 0, y: -30 },
+          { x: -50, y: 0 },
+          { x: 0, y: 30 },
+          { x: 0, y: 20 },
+          { x: 50, y: 20 },
+        ];
+        fabricObject = new fabric.Polygon(arrowLeftPoints, {
+          left: obj.left || 0,
+          top: obj.top || 0,
+          width: obj.width || 100,
+          height: obj.height || 100,
+          fill: obj.fill || "#DC2626",
+          stroke: obj.stroke || "#000000",
+          strokeWidth: obj.strokeWidth || 0,
+          opacity: obj.opacity || 1,
+          angle: obj.angle || 0,
+          scaleX: obj.scaleX || 1,
+          scaleY: obj.scaleY || 1,
+          objectCaching: false,
+          originX: "center",
+          originY: "center",
+        }) as FabricObjectWithData;
+        break;
+
+      case "arrow-up":
+        const arrowUpPoints = [
+          { x: -20, y: 50 },
+          { x: -20, y: 0 },
+          { x: -30, y: 0 },
+          { x: 0, y: -50 },
+          { x: 30, y: 0 },
+          { x: 20, y: 0 },
+          { x: 20, y: 50 },
+        ];
+        fabricObject = new fabric.Polygon(arrowUpPoints, {
+          left: obj.left || 0,
+          top: obj.top || 0,
+          width: obj.width || 100,
+          height: obj.height || 100,
+          fill: obj.fill || "#DC2626",
+          stroke: obj.stroke || "#000000",
+          strokeWidth: obj.strokeWidth || 0,
+          opacity: obj.opacity || 1,
+          angle: obj.angle || 0,
+          scaleX: obj.scaleX || 1,
+          scaleY: obj.scaleY || 1,
+          objectCaching: false,
+          originX: "center",
+          originY: "center",
+        }) as FabricObjectWithData;
+        break;
+
+      case "arrow-down":
+        const arrowDownPoints = [
+          { x: -20, y: -50 },
+          { x: -20, y: 0 },
+          { x: -30, y: 0 },
+          { x: 0, y: 50 },
+          { x: 30, y: 0 },
+          { x: 20, y: 0 },
+          { x: 20, y: -50 },
+        ];
+        fabricObject = new fabric.Polygon(arrowDownPoints, {
+          left: obj.left || 0,
+          top: obj.top || 0,
+          width: obj.width || 100,
+          height: obj.height || 100,
+          fill: obj.fill || "#DC2626",
+          stroke: obj.stroke || "#000000",
+          strokeWidth: obj.strokeWidth || 0,
+          opacity: obj.opacity || 1,
+          angle: obj.angle || 0,
+          scaleX: obj.scaleX || 1,
+          scaleY: obj.scaleY || 1,
+          objectCaching: false,
+          originX: "center",
+          originY: "center",
+        }) as FabricObjectWithData;
+        break;
+
+      case "line":
+        fabricObject = new fabric.Line([0, 0, obj.width || 100, 0], {
+          left: obj.left || 0,
+          top: obj.top || 0,
+          stroke: obj.fill || "#6B7280",
+          strokeWidth: obj.strokeWidth || 3,
+          opacity: obj.opacity || 1,
+          angle: obj.angle || 0,
+          scaleX: obj.scaleX || 1,
+          scaleY: obj.scaleY || 1,
+        }) as FabricObjectWithData;
+        break;
+
+      case "line-vertical":
+        fabricObject = new fabric.Line([0, 0, 0, obj.height || 100], {
+          left: obj.left || 0,
+          top: obj.top || 0,
+          stroke: obj.fill || "#6B7280",
+          strokeWidth: obj.strokeWidth || 3,
+          opacity: obj.opacity || 1,
+          angle: obj.angle || 0,
+          scaleX: obj.scaleX || 1,
+          scaleY: obj.scaleY || 1,
+        }) as FabricObjectWithData;
+        break;
+
+      case "line-diagonal":
+        fabricObject = new fabric.Line(
+          [0, 0, obj.width || 100, obj.height || 100],
+          {
+            left: obj.left || 0,
+            top: obj.top || 0,
+            stroke: obj.fill || "#6B7280",
+            strokeWidth: obj.strokeWidth || 3,
+            opacity: obj.opacity || 1,
+            angle: obj.angle || 0,
+            scaleX: obj.scaleX || 1,
+            scaleY: obj.scaleY || 1,
+          }
+        ) as FabricObjectWithData;
+        break;
+
+      case "line-zigzag":
+        // Create zigzag line using multiple line segments
+        const zigzagPoints = [];
+        const zigzagWidth = obj.width || 100;
+        const zigzagSegments = 8;
+        for (let i = 0; i <= zigzagSegments; i++) {
+          const x = (zigzagWidth / zigzagSegments) * i;
+          const y = i % 2 === 0 ? 0 : 20;
+          zigzagPoints.push({ x, y });
+        }
+        fabricObject = new fabric.Polyline(zigzagPoints, {
+          left: obj.left || 0,
+          top: obj.top || 0,
+          width: obj.width || 100,
+          height: obj.height || 100,
+          stroke: obj.fill || "#6B7280",
+          strokeWidth: obj.strokeWidth || 3,
+          fill: "transparent",
+          opacity: obj.opacity || 1,
+          angle: obj.angle || 0,
+          scaleX: obj.scaleX || 1,
+          scaleY: obj.scaleY || 1,
+          objectCaching: false,
+          originX: "center",
+          originY: "center",
+        }) as FabricObjectWithData;
+        break;
+
+      case "line-wavy":
+        // Create wavy line using curve
+        const wavyPoints = [];
+        const wavyWidth = obj.width || 100;
+        const wavySegments = 12;
+        for (let i = 0; i <= wavySegments; i++) {
+          const x = (wavyWidth / wavySegments) * i;
+          const y = Math.sin((i / wavySegments) * Math.PI * 4) * 15;
+          wavyPoints.push({ x, y });
+        }
+        fabricObject = new fabric.Polyline(wavyPoints, {
+          left: obj.left || 0,
+          top: obj.top || 0,
+          width: obj.width || 100,
+          height: obj.height || 100,
+          stroke: obj.fill || "#6B7280",
+          strokeWidth: obj.strokeWidth || 3,
+          fill: "transparent",
+          opacity: obj.opacity || 1,
+          angle: obj.angle || 0,
+          scaleX: obj.scaleX || 1,
+          scaleY: obj.scaleY || 1,
+          objectCaching: false,
+          originX: "center",
+          originY: "center",
+        }) as FabricObjectWithData;
+        break;
+
       default:
+        // Default to rectangle for any unrecognized shape type
         fabricObject = new fabric.Rect({
           left: obj.left || 0,
           top: obj.top || 0,
@@ -485,9 +902,7 @@ export default function JsonCanvas({
   const createIconObject = async (
     obj: EditorObject
   ): Promise<FabricObjectWithData> => {
-    console.log("Creating icon object:", obj);
     if (!obj.iconSvg) {
-      console.log("No iconSvg provided, creating fallback rectangle");
       // Fallback to a simple rectangle if no SVG is provided
       const fabricObject = new fabric.Rect({
         left: obj.left || 0,
@@ -509,18 +924,14 @@ export default function JsonCanvas({
 
     return new Promise((resolve) => {
       try {
-        console.log("Creating icon from SVG data");
-
         // Extract path data using regex (simpler approach)
         const pathMatch = obj.iconSvg?.match(/d="([^"]+)"/);
         if (!pathMatch) {
-          console.error("No path data found in SVG");
           createFallbackObject();
           return;
         }
 
         const pathData = pathMatch[1];
-        console.log("Creating fabric path from SVG data");
 
         // Create a fabric.js path object from the SVG path data
         const fabricObject = new fabric.Path(pathData, {
@@ -547,11 +958,9 @@ export default function JsonCanvas({
           duplicate: duplicateControl,
         };
 
-        console.log("Icon object created successfully:", fabricObject);
         resolve(fabricObject);
 
         function createFallbackObject() {
-          console.log("Creating fallback circle for failed SVG");
           const fabricObject = new fabric.Circle({
             left: obj.left || 0,
             top: obj.top || 0,
@@ -578,8 +987,7 @@ export default function JsonCanvas({
           fabricObject.iconPrefix = obj.iconPrefix;
           resolve(fabricObject);
         }
-      } catch (error) {
-        console.error("Error creating icon object:", error);
+      } catch {
         // Create fallback circle
         const fabricObject = new fabric.Circle({
           left: obj.left || 0,
@@ -619,8 +1027,6 @@ export default function JsonCanvas({
         return;
       }
 
-      console.log("Creating image object with URL:", obj.imageUrl);
-
       // Load the image first
       const img = new Image();
 
@@ -628,7 +1034,6 @@ export default function JsonCanvas({
       img.crossOrigin = "anonymous";
 
       img.onload = () => {
-        console.log("Image loaded successfully:", obj.imageUrl);
         try {
           const fabricObject = new fabric.Image(img, {
             left: obj.left || 0,
@@ -664,7 +1069,6 @@ export default function JsonCanvas({
         // Try without CORS as fallback
         const imgWithoutCors = new Image();
         imgWithoutCors.onload = () => {
-          console.log("Image loaded successfully without CORS:", obj.imageUrl);
           try {
             const fabricObject = new fabric.Image(imgWithoutCors, {
               left: obj.left || 0,
@@ -702,7 +1106,6 @@ export default function JsonCanvas({
       };
 
       const createFallbackObject = () => {
-        console.log("Creating fallback object for failed image:", obj.imageUrl);
         // Create a fallback rectangle with error message
         const fallbackObject = new fabric.Rect({
           left: obj.left || 0,
@@ -880,65 +1283,26 @@ export default function JsonCanvas({
         break;
 
       case "shape":
-        // Check if the shape type has changed
-        const currentShapeType = fabricObject.type;
-        const newShapeType = obj.shapeType || "rect";
-
-        // Map our shapeType values to Fabric.js types
-        const getFabricShapeType = (shapeType: string) => {
-          switch (shapeType) {
-            case "circle":
-              return "circle";
-            case "triangle":
-              return "triangle";
-            case "rect":
-            default:
-              return "rect";
-          }
-        };
-
-        const expectedFabricType = getFabricShapeType(newShapeType);
-
-        if (currentShapeType !== expectedFabricType) {
-          // Shape type changed, recreate the object
-          console.log("Shape type changed, recreating shape:", newShapeType);
-
-          // Store current selection state
-          const wasSelected = canvas.getActiveObject() === fabricObject;
-          const wasInSelection = canvas
-            .getActiveObjects()
-            .includes(fabricObject);
-
-          // Remove the old shape object
-          canvas.remove(fabricObject);
-          fabricObjectsRef.current.delete(obj.id);
-
-          // Create new shape object
-          const newShapeObject = createShapeObject(obj);
-          if (newShapeObject) {
-            canvas.add(newShapeObject);
-            fabricObjectsRef.current.set(obj.id, newShapeObject);
-
-            // Restore selection state
-            if (wasSelected) {
-              canvas.setActiveObject(newShapeObject);
-            } else if (wasInSelection) {
-              // If it was part of a multi-selection, we need to rebuild the selection
-              const currentSelection = canvas.getActiveObjects();
-              const newSelection = new fabric.ActiveSelection(
-                [...currentSelection, newShapeObject],
-                {
-                  canvas: canvas,
-                }
-              );
-              canvas.setActiveObject(newSelection);
-            }
-
-            canvas.renderAll();
-          }
-        } else {
-          // Only update properties if shape type hasn't changed
-          const shapeUpdates: Partial<fabric.Object> = {
+        // Check if this is a custom shape (polygon, polyline, ellipse)
+        if (
+          obj.shapeType &&
+          [
+            "diamond",
+            "pentagon",
+            "hexagon",
+            "octagon",
+            "star",
+            "cross",
+            "arrow-right",
+            "arrow-left",
+            "arrow-up",
+            "arrow-down",
+            "line-zigzag",
+            "line-wavy",
+          ].includes(obj.shapeType)
+        ) {
+          // Handle custom shapes like icons - only update scale, opacity, angle, and fill
+          const customShapeUpdates: Partial<fabric.Object> = {
             fill: obj.fill || "#3B82F6",
             stroke: obj.stroke || "#000000",
             strokeWidth: obj.strokeWidth || 0,
@@ -948,15 +1312,88 @@ export default function JsonCanvas({
             scaleY: obj.scaleY || 1,
           };
 
-          if (obj.shapeType === "rect") {
-            (shapeUpdates as fabric.Rect).rx = obj.cornerRadius || 0;
-            (shapeUpdates as fabric.Rect).ry = obj.cornerRadius || 0;
-          }
+          fabricObject.set(customShapeUpdates);
 
-          fabricObject.set(shapeUpdates);
-
-          // Force immediate re-render for shapes
+          // Force immediate re-render for custom shapes
           canvas.requestRenderAll();
+        } else {
+          // Handle basic shapes (rect, circle, triangle)
+          // Check if the shape type has changed
+          const currentShapeType = fabricObject.type;
+          const newShapeType = obj.shapeType || "rect";
+
+          // Map our shapeType values to Fabric.js types
+          const getFabricShapeType = (shapeType: string) => {
+            switch (shapeType) {
+              case "circle":
+                return "circle";
+              case "triangle":
+                return "triangle";
+              case "rect":
+              default:
+                return "rect";
+            }
+          };
+
+          const expectedFabricType = getFabricShapeType(newShapeType);
+
+          if (currentShapeType !== expectedFabricType) {
+            // Shape type changed, recreate the object
+            // Store current selection state
+            const wasSelected = canvas.getActiveObject() === fabricObject;
+            const wasInSelection = canvas
+              .getActiveObjects()
+              .includes(fabricObject);
+
+            // Remove the old shape object
+            canvas.remove(fabricObject);
+            fabricObjectsRef.current.delete(obj.id);
+
+            // Create new shape object
+            const newShapeObject = createShapeObject(obj);
+            if (newShapeObject) {
+              canvas.add(newShapeObject);
+              fabricObjectsRef.current.set(obj.id, newShapeObject);
+
+              // Restore selection state
+              if (wasSelected) {
+                canvas.setActiveObject(newShapeObject);
+              } else if (wasInSelection) {
+                // If it was part of a multi-selection, we need to rebuild the selection
+                const currentSelection = canvas.getActiveObjects();
+                const newSelection = new fabric.ActiveSelection(
+                  [...currentSelection, newShapeObject],
+                  {
+                    canvas: canvas,
+                  }
+                );
+                canvas.setActiveObject(newSelection);
+              }
+
+              canvas.renderAll();
+            }
+          } else {
+            // Only update properties if shape type hasn't changed
+            const shapeUpdates: Partial<fabric.Object> = {
+              fill: obj.fill || "#3B82F6",
+              stroke: obj.stroke || "#000000",
+              strokeWidth: obj.strokeWidth || 0,
+              opacity: obj.opacity || 1,
+              angle: obj.angle || 0,
+              scaleX: obj.scaleX || 1,
+              scaleY: obj.scaleY || 1,
+            };
+
+            if (obj.shapeType === "rect") {
+              (shapeUpdates as fabric.Rect).rx = obj.cornerRadius || 0;
+              (shapeUpdates as fabric.Rect).ry = obj.cornerRadius || 0;
+            }
+
+            fabricObject.set(shapeUpdates);
+
+            // Force immediate re-render for shapes
+            canvas.requestRenderAll();
+          }
         }
         break;
 
@@ -981,8 +1418,6 @@ export default function JsonCanvas({
         const currentImageUrl = (fabricObject as fabric.Image).getSrc();
         if (obj.imageUrl && currentImageUrl !== obj.imageUrl) {
           // Image URL changed, reload the image
-          console.log("Image URL changed, reloading image:", obj.imageUrl);
-
           // Remove the old image object
           canvas.remove(fabricObject);
           fabricObjectsRef.current.delete(obj.id);
@@ -1133,6 +1568,17 @@ export default function JsonCanvas({
         if (target.type === "rect") {
           updates.cornerRadius = (target as fabric.Rect).rx || 0;
         }
+      } else if (
+        target.type === "polygon" ||
+        target.type === "polyline" ||
+        target.type === "ellipse"
+      ) {
+        // For custom shapes, ONLY update scale, NEVER update width/height during scaling!
+        // This allows fabric.js to handle scaling smoothly.
+        // Width/height will be updated in handleObjectModified if you want to persist the new size.
+        console.log(
+          "Custom shape scaling - only updating scale, not width/height"
+        );
       } else if (target.type === "image") {
         // For images, preserve the original dimensions and only update position/transform
         updates.opacity = target.opacity || 1;
@@ -1173,17 +1619,70 @@ export default function JsonCanvas({
 
       isDraggingRef.current = true;
 
+      console.log(
+        "Scaling object:",
+        target.type,
+        "scaleX:",
+        target.scaleX,
+        "scaleY:",
+        target.scaleY
+      );
+
       const updates: Partial<EditorObject> = {
         scaleX: target.scaleX || 1,
         scaleY: target.scaleY || 1,
       };
 
-      // Only update width/height for non-image objects
-      if (target.type !== "image") {
+      // Handle width/height updates based on object type
+      if (target.type === "image") {
+        // Images don't need width/height updates during scaling
+        // They maintain their aspect ratio and dimensions
+        console.log("Image scaling - no width/height update");
+      } else if (target.type === "text") {
+        // Text objects use their own width/height
         updates.width = target.width || 100;
         updates.height = target.height || 100;
+        console.log(
+          "Text scaling - updating width/height:",
+          updates.width,
+          updates.height
+        );
+      } else if (
+        target.type === "rect" ||
+        target.type === "circle" ||
+        target.type === "triangle"
+      ) {
+        // Basic shapes use their width/height
+        updates.width = target.width || 100;
+        updates.height = target.height || 100;
+        console.log(
+          "Basic shape scaling - updating width/height:",
+          updates.width,
+          updates.height
+        );
+      } else if (
+        target.type === "polygon" ||
+        target.type === "polyline" ||
+        target.type === "ellipse"
+      ) {
+        // For custom shapes, ONLY update scale, NEVER update width/height during scaling!
+        // This allows fabric.js to handle scaling smoothly.
+        // Width/height will be updated in handleObjectModified if you want to persist the new size.
+        console.log(
+          "Custom shape scaling - only updating scale, not width/height"
+        );
+      } else {
+        // Default fallback for other object types
+        updates.width = target.width || 100;
+        updates.height = target.height || 100;
+        console.log(
+          "Default scaling - updating width/height:",
+          updates.width,
+          updates.height
+        );
       }
 
+      console.log("Final updates:", updates);
       editorState.updateObjectSilent(target.data.objectId, updates);
     };
 
@@ -1256,6 +1755,7 @@ export default function JsonCanvas({
       if (!fabricObj?.data?.objectId) return;
 
       const updates: Partial<EditorObject> = {};
+      const moveAmount = e.shiftKey ? 10 : 1; // Shift for larger movement
 
       switch (e.key) {
         case "Delete":
@@ -1270,29 +1770,47 @@ export default function JsonCanvas({
         case "ArrowLeft":
           e.preventDefault();
           if (e.shiftKey) {
+            // Shift + arrow for rotation
             updates.angle = (fabricObj.angle || 0) - 15;
           } else {
-            updates.left = (fabricObj.left || 0) - 1;
+            // Regular arrow for movement with boundary checking
+            const newLeft = Math.max(0, (fabricObj.left || 0) - moveAmount);
+            updates.left = newLeft;
           }
           break;
 
         case "ArrowRight":
           e.preventDefault();
           if (e.shiftKey) {
+            // Shift + arrow for rotation
             updates.angle = (fabricObj.angle || 0) + 15;
           } else {
-            updates.left = (fabricObj.left || 0) + 1;
+            // Regular arrow for movement with boundary checking
+            const maxLeft = page.width - (fabricObj.width || 100);
+            const newLeft = Math.min(
+              maxLeft,
+              (fabricObj.left || 0) + moveAmount
+            );
+            updates.left = newLeft;
           }
           break;
 
         case "ArrowUp":
           e.preventDefault();
-          updates.top = (fabricObj.top || 0) - 1;
+          // Regular arrow for movement with boundary checking
+          const newTop = Math.max(0, (fabricObj.top || 0) - moveAmount);
+          updates.top = newTop;
           break;
 
         case "ArrowDown":
           e.preventDefault();
-          updates.top = (fabricObj.top || 0) + 1;
+          // Regular arrow for movement with boundary checking
+          const maxTop = page.height - (fabricObj.height || 100);
+          const newTopDown = Math.min(
+            maxTop,
+            (fabricObj.top || 0) + moveAmount
+          );
+          updates.top = newTopDown;
           break;
 
         case "b":
@@ -1339,14 +1857,48 @@ export default function JsonCanvas({
       }
 
       if (Object.keys(updates).length > 0) {
+        // Update the editor state
         editorState.updateObjectSilent(fabricObj.data.objectId, updates);
+
+        // Also update the Fabric.js object directly for immediate visual feedback
+        if (updates.left !== undefined) {
+          fabricObj.set({ left: updates.left });
+        }
+        if (updates.top !== undefined) {
+          fabricObj.set({ top: updates.top });
+        }
+        if (updates.angle !== undefined) {
+          fabricObj.set({ angle: updates.angle });
+        }
+        if (updates.fontWeight !== undefined) {
+          fabricObj.set({ fontWeight: updates.fontWeight });
+        }
+        if (updates.fontStyle !== undefined) {
+          fabricObj.set({ fontStyle: updates.fontStyle });
+        }
+        if (updates.textDecoration !== undefined) {
+          fabricObj.set({ underline: updates.textDecoration === "underline" });
+        }
+
+        // Force immediate canvas update
+        canvas.requestRenderAll();
       }
     };
 
+    // Attach keyboard handler to the canvas element itself
+    const canvasElement = canvasRef.current;
+    if (canvasElement) {
+      canvasElement.addEventListener("keydown", handleKeyDown);
+    }
+
+    // Also attach to document for when canvas doesn't have focus
     document.addEventListener("keydown", handleKeyDown);
 
     return () => {
       canvas.dispose();
+      if (canvasElement) {
+        canvasElement.removeEventListener("keydown", handleKeyDown);
+      }
       document.removeEventListener("keydown", handleKeyDown);
       if (selectionTimeoutRef.current) {
         clearTimeout(selectionTimeoutRef.current);
@@ -1755,10 +2307,17 @@ export default function JsonCanvas({
           width: `${page.width}px`,
           height: `${page.height}px`,
         }}
+        onClick={() => {
+          // Ensure canvas gets focus when clicked
+          if (canvasRef.current) {
+            canvasRef.current.focus();
+          }
+        }}
       >
         <canvas
           ref={canvasRef}
           className="border border-gray-300"
+          tabIndex={0}
           style={{
             display: "block",
             position: "relative",
