@@ -24,6 +24,7 @@ import {
   GripVertical,
   Edit3,
   Star,
+  Magnet,
 } from "lucide-react";
 import { editorState, EditorObject, EditorProject } from "@/lib/editor-state";
 import JsonCanvas from "@/components/editor/JsonCanvas";
@@ -89,6 +90,7 @@ export default function TemplateCreator() {
   const [exportFormat, setExportFormat] = useState<
     "png" | "jpeg" | "pdf" | "json"
   >("png");
+  const [snapEnabled, setSnapEnabled] = useState(false);
 
   const currentPage =
     project.pages.find((p) => p.id === selectedPageId) || null;
@@ -1768,23 +1770,46 @@ export default function TemplateCreator() {
                 variant="outline"
                 size="sm"
                 onClick={toggleGrid}
-                className={`h-8 px-2 lg:px-3 ${
-                  showGrid ? "bg-blue-100 border-blue-300" : ""
+                className={`h-8   px-2 lg:px-3 ${
+                  showGrid ? "bg-primary/10 border-primary/30" : ""
                 }`}
               >
-                <Grid className="w-3 h-3 lg:w-4 lg:h-4 mr-1 lg:mr-2" />
-                <span className="hidden sm:inline">Grid</span>
+                <Grid
+                  className={`w-3 h-3 lg:w-4 lg:h-4 ${
+                    showGrid ? "text-primary" : ""
+                  }`}
+                />
+                {/* <span className="hidden sm:inline">Grid</span> */}
+              </Button>
+              {/* Snap Toggle Button */}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setSnapEnabled((v) => !v)}
+                className={`h-8 px-2 lg:px-3 ${
+                  snapEnabled
+                    ? "bg-primary/10 border-primary/30 text-primary"
+                    : ""
+                }`}
+                title={snapEnabled ? "Disable snapping" : "Enable snapping"}
+              >
+                <Magnet
+                  className={`w-3 h-3 lg:w-4 lg:h-4 ${
+                    snapEnabled ? "text-primary" : ""
+                  }`}
+                />
+                {/* <span className="hidden sm:inline">Snap</span> */}
               </Button>
               <Button
                 variant="outline"
                 size="sm"
                 onClick={toggleRuler}
                 className={`h-8 px-2 lg:px-3 ${
-                  showRuler ? "bg-blue-100 border-blue-300" : ""
+                  showRuler ? "bg-primary/10 border-primary/30" : ""
                 }`}
               >
-                <Ruler className="w-3 h-3 lg:w-4 lg:h-4 mr-1 lg:mr-2" />
-                <span className="hidden sm:inline">Ruler</span>
+                <Ruler className="w-3 h-3 lg:w-4 lg:h-4 " />
+                {/* <span className="hidden sm:inline">Ruler</span> */}
               </Button>
 
               <Button
@@ -1830,6 +1855,7 @@ export default function TemplateCreator() {
                 showRuler={showRuler}
                 zoomLevel={zoomLevel}
                 forceCanvasUpdate={forceCanvasUpdate}
+                snapEnabled={snapEnabled}
               />
             ) : (
               <div className="flex items-center justify-center h-full">

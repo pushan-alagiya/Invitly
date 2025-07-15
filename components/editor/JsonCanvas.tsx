@@ -12,6 +12,7 @@ interface JsonCanvasProps {
   showRuler?: boolean;
   zoomLevel?: number;
   forceCanvasUpdate?: number;
+  snapEnabled?: boolean;
 }
 
 // Interface for Fabric.js objects with our custom data property
@@ -38,15 +39,22 @@ export default function JsonCanvas({
   showRuler = false,
   zoomLevel = 1,
   forceCanvasUpdate,
+  snapEnabled = false,
 }: JsonCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fabricCanvasRef = useRef<fabric.Canvas | null>(null);
   const selectionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const moveUpdateTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const isDraggingRef = useRef(false);
+  const snapEnabledRef = useRef(snapEnabled);
 
   // Track Fabric.js objects by their object IDs for efficient updates
   const fabricObjectsRef = useRef<Map<string, FabricObjectWithData>>(new Map());
+
+  // Update snapEnabled ref when prop changes
+  useEffect(() => {
+    snapEnabledRef.current = snapEnabled;
+  }, [snapEnabled]);
 
   // Helper function to convert numbers to Roman numerals
   const toRoman = (num: number): string => {
@@ -1597,6 +1605,138 @@ export default function JsonCanvas({
       target.isMoving = true;
       isDraggingRef.current = true;
 
+      const canvas = fabricCanvasRef.current;
+      if (!canvas) return;
+
+      if (!snapEnabledRef.current) {
+        clearSnapLines(canvas);
+        // No snapping, just update position as normal
+        if (moveUpdateTimeoutRef.current) {
+          clearTimeout(moveUpdateTimeoutRef.current);
+        }
+        moveUpdateTimeoutRef.current = setTimeout(() => {
+          if (target.isMoving && target.data?.objectId) {
+            const updates: Partial<EditorObject> = {
+              left: target.left || 0,
+              top: target.top || 0,
+            };
+            editorState.updateObjectSilent(target.data.objectId, updates);
+            target.isMoving = false;
+            clearSnapLines(canvas);
+          }
+        }, 50);
+        return;
+      }
+
+      // --- SNAPPING ---
+      clearSnapLines(canvas);
+      const bounds = getObjectBounds(target);
+      const snapTargets = getSnapTargets(canvas, target);
+      // Collect all possible snap x/y
+      const snapX = snapTargets
+        .filter((t) => t.x !== undefined)
+        .map((t) => t.x!);
+      const snapY = snapTargets
+        .filter((t) => t.y !== undefined)
+        .map((t) => t.y!);
+
+      // Try to snap left, right, centerX
+      let snappedX = bounds.left;
+      let snappedY = bounds.top;
+      let didSnapX = false;
+      let didSnapY = false;
+
+      // Snap X (left)
+      let snap = snapValue(bounds.left, snapX);
+      if (snap.snapped) {
+        snappedX = snap.value;
+        drawSnapLine(
+          canvas,
+          snap.value,
+          0,
+          snap.value,
+          page.height,
+          snap.value === page.width / 2 ? "#22d3ee" : "#e11d48"
+        );
+        didSnapX = true;
+      }
+      // Snap X (right)
+      snap = snapValue(bounds.right, snapX);
+      if (snap.snapped) {
+        snappedX = snap.value - bounds.width;
+        drawSnapLine(
+          canvas,
+          snap.value,
+          0,
+          snap.value,
+          page.height,
+          snap.value === page.width / 2 ? "#22d3ee" : "#e11d48"
+        );
+        didSnapX = true;
+      }
+      // Snap X (center)
+      snap = snapValue(bounds.centerX, snapX);
+      if (snap.snapped) {
+        snappedX = snap.value - bounds.width / 2;
+        drawSnapLine(
+          canvas,
+          snap.value,
+          0,
+          snap.value,
+          page.height,
+          snap.value === page.width / 2 ? "#22d3ee" : "#e11d48"
+        );
+        didSnapX = true;
+      }
+      // Snap Y (top)
+      snap = snapValue(bounds.top, snapY);
+      if (snap.snapped) {
+        snappedY = snap.value;
+        drawSnapLine(
+          canvas,
+          0,
+          snap.value,
+          page.width,
+          snap.value,
+          snap.value === page.height / 2 ? "#22d3ee" : "#e11d48"
+        );
+        didSnapY = true;
+      }
+      // Snap Y (bottom)
+      snap = snapValue(bounds.bottom, snapY);
+      if (snap.snapped) {
+        snappedY = snap.value - bounds.height;
+        drawSnapLine(
+          canvas,
+          0,
+          snap.value,
+          page.width,
+          snap.value,
+          snap.value === page.height / 2 ? "#22d3ee" : "#e11d48"
+        );
+        didSnapY = true;
+      }
+      // Snap Y (center)
+      snap = snapValue(bounds.centerY, snapY);
+      if (snap.snapped) {
+        snappedY = snap.value - bounds.height / 2;
+        drawSnapLine(
+          canvas,
+          0,
+          snap.value,
+          page.width,
+          snap.value,
+          snap.value === page.height / 2 ? "#22d3ee" : "#e11d48"
+        );
+        didSnapY = true;
+      }
+
+      // Apply snapped position
+      if (didSnapX || didSnapY) {
+        target.set({ left: snappedX, top: snappedY });
+        canvas.requestRenderAll();
+      }
+
       if (moveUpdateTimeoutRef.current) {
         clearTimeout(moveUpdateTimeoutRef.current);
       }
@@ -1609,6 +1749,7 @@ export default function JsonCanvas({
           };
           editorState.updateObjectSilent(target.data.objectId, updates);
           target.isMoving = false;
+          clearSnapLines(canvas);
         }
       }, 50);
     };
@@ -1619,71 +1760,100 @@ export default function JsonCanvas({
 
       isDraggingRef.current = true;
 
-      console.log(
-        "Scaling object:",
-        target.type,
-        "scaleX:",
-        target.scaleX,
-        "scaleY:",
-        target.scaleY
-      );
+      const canvas = fabricCanvasRef.current;
+      if (!canvas) return;
 
-      const updates: Partial<EditorObject> = {
-        scaleX: target.scaleX || 1,
-        scaleY: target.scaleY || 1,
-      };
+      if (!snapEnabledRef.current) {
+        clearSnapLines(canvas);
+        canvas.requestRenderAll();
+        return;
+      }
 
-      // Handle width/height updates based on object type
-      if (target.type === "image") {
-        // Images don't need width/height updates during scaling
-        // They maintain their aspect ratio and dimensions
-        console.log("Image scaling - no width/height update");
-      } else if (target.type === "text") {
-        // Text objects use their own width/height
-        updates.width = target.width || 100;
-        updates.height = target.height || 100;
-        console.log(
-          "Text scaling - updating width/height:",
-          updates.width,
-          updates.height
+      clearSnapLines(canvas);
+      const bounds = getObjectBounds(target);
+      const snapTargets = getSnapTargets(canvas, target);
+      const snapX = snapTargets
+        .filter((t) => t.x !== undefined)
+        .map((t) => t.x!);
+      const snapY = snapTargets
+        .filter((t) => t.y !== undefined)
+        .map((t) => t.y!);
+
+      // Snap width/height (right/bottom) and center
+      let snappedWidth = bounds.width;
+      let snappedHeight = bounds.height;
+      let didSnapW = false;
+      let didSnapH = false;
+
+      // Snap right edge
+      let snap = snapValue(bounds.right, snapX);
+      if (snap.snapped) {
+        snappedWidth = snap.value - bounds.left;
+        drawSnapLine(
+          canvas,
+          snap.value,
+          0,
+          snap.value,
+          page.height,
+          snap.value === page.width / 2 ? "#22d3ee" : "#e11d48"
         );
-      } else if (
-        target.type === "rect" ||
-        target.type === "circle" ||
-        target.type === "triangle"
-      ) {
-        // Basic shapes use their width/height
-        updates.width = target.width || 100;
-        updates.height = target.height || 100;
-        console.log(
-          "Basic shape scaling - updating width/height:",
-          updates.width,
-          updates.height
+        didSnapW = true;
+      }
+      // Snap bottom edge
+      snap = snapValue(bounds.bottom, snapY);
+      if (snap.snapped) {
+        snappedHeight = snap.value - bounds.top;
+        drawSnapLine(
+          canvas,
+          0,
+          snap.value,
+          page.width,
+          snap.value,
+          snap.value === page.height / 2 ? "#22d3ee" : "#e11d48"
         );
-      } else if (
-        target.type === "polygon" ||
-        target.type === "polyline" ||
-        target.type === "ellipse"
-      ) {
-        // For custom shapes, ONLY update scale, NEVER update width/height during scaling!
-        // This allows fabric.js to handle scaling smoothly.
-        // Width/height will be updated in handleObjectModified if you want to persist the new size.
-        console.log(
-          "Custom shape scaling - only updating scale, not width/height"
+        didSnapH = true;
+      }
+      // Snap centerX
+      snap = snapValue(bounds.centerX, snapX);
+      if (snap.snapped) {
+        const newWidth = (snap.value - bounds.left) * 2;
+        if (newWidth > 0) {
+          snappedWidth = newWidth;
+        }
+        drawSnapLine(
+          canvas,
+          snap.value,
+          0,
+          snap.value,
+          page.height,
+          snap.value === page.width / 2 ? "#22d3ee" : "#e11d48"
         );
-      } else {
-        // Default fallback for other object types
-        updates.width = target.width || 100;
-        updates.height = target.height || 100;
-        console.log(
-          "Default scaling - updating width/height:",
-          updates.width,
-          updates.height
+      }
+      // Snap centerY
+      snap = snapValue(bounds.centerY, snapY);
+      if (snap.snapped) {
+        const newHeight = (snap.value - bounds.top) * 2;
+        if (newHeight > 0) {
+          snappedHeight = newHeight;
+        }
+        drawSnapLine(
+          canvas,
+          0,
+          snap.value,
+          page.width,
+          snap.value,
+          snap.value === page.height / 2 ? "#22d3ee" : "#e11d48"
         );
       }
 
-      console.log("Final updates:", updates);
-      editorState.updateObjectSilent(target.data.objectId, updates);
+      // For scaling, only apply snap if user is close to a snap point
+      if (didSnapW && target.width) {
+        target.set({ scaleX: snappedWidth / target.width });
+      }
+      if (didSnapH && target.height) {
+        target.set({ scaleY: snappedHeight / target.height });
+      }
+      canvas.requestRenderAll();
     };
 
     const handleObjectRotating = (e: { target?: fabric.Object }) => {
@@ -2309,6 +2479,128 @@ export default function JsonCanvas({
   useEffect(() => {
     updateGridAndRuler();
   }, [showGrid, showRuler]);
+
+  // --- SNAPPING LOGIC ---
+  const SNAP_THRESHOLD = 8; // px
+  const SNAP_LINE_COLOR = "#e11d48"; // Magenta
+  let snapLines: fabric.Line[] = [];
+
+  function clearSnapLines(canvas: fabric.Canvas) {
+    snapLines.forEach((line) => canvas.remove(line));
+    snapLines = [];
+  }
+
+  function drawSnapLine(
+    canvas: fabric.Canvas,
+    x1: number,
+    y1: number,
+    x2: number,
+    y2: number,
+    color: string = SNAP_LINE_COLOR
+  ) {
+    const line = new fabric.Line([x1, y1, x2, y2], {
+      stroke: color,
+      strokeWidth: 2,
+      selectable: false,
+      evented: false,
+      excludeFromExport: true,
+      hoverCursor: "default",
+    });
+    canvas.add(line);
+    snapLines.push(line);
+  }
+
+  function getObjectBounds(obj: fabric.Object) {
+    const {
+      left = 0,
+      top = 0,
+      width = 0,
+      height = 0,
+      scaleX = 1,
+      scaleY = 1,
+    } = obj;
+    const w = width * scaleX;
+    const h = height * scaleY;
+    return {
+      left: left,
+      top: top,
+      right: left + w,
+      bottom: top + h,
+      centerX: left + w / 2,
+      centerY: top + h / 2,
+      width: w,
+      height: h,
+    };
+  }
+
+  function getSnapTargets(canvas: fabric.Canvas, movingObj: fabric.Object) {
+    // Snap to page edges/centers, grid, and other objects
+    const pageWidth = page.width;
+    const pageHeight = page.height;
+    const targets: { x?: number; y?: number }[] = [
+      // Page edges and centers
+      { x: 0 }, // left
+      { x: pageWidth / 2 }, // centerX
+      { x: pageWidth }, // right
+      { y: 0 }, // top
+      { y: pageHeight / 2 }, // centerY
+      { y: pageHeight }, // bottom
+    ];
+
+    // Add grid points if grid is shown
+    if (showGrid) {
+      const gridSize = 20;
+      for (let x = 0; x <= pageWidth; x += gridSize) {
+        targets.push({ x });
+      }
+      for (let y = 0; y <= pageHeight; y += gridSize) {
+        targets.push({ y });
+      }
+    }
+
+    // Add other objects' edges/centers
+    canvas.getObjects().forEach((obj) => {
+      const fabricObj = obj as FabricObjectWithData;
+      if (
+        obj === movingObj ||
+        fabricObj.data?.isGridLine ||
+        fabricObj.data?.isRuler
+      )
+        return;
+      const b = getObjectBounds(obj);
+      targets.push(
+        { x: b.left },
+        { x: b.right },
+        { x: b.centerX },
+        { y: b.top },
+        { y: b.bottom },
+        { y: b.centerY }
+      );
+    });
+    return targets;
+  }
+
+  function snapValue(
+    val: number,
+    targets: (number | undefined)[]
+  ): { snapped: boolean; value: number; snapTo: number | undefined } {
+    for (const t of targets) {
+      if (t !== undefined && Math.abs(val - t) <= SNAP_THRESHOLD) {
+        return { snapped: true, value: t, snapTo: t };
+      }
+    }
+    return { snapped: false, value: val, snapTo: undefined };
+  }
+
+  // Handle snapEnabled changes separately to avoid re-rendering objects
+  useEffect(() => {
+    const canvas = fabricCanvasRef.current;
+    if (!canvas) return;
+
+    // Clear any existing snap lines when snap is toggled
+    clearSnapLines(canvas);
+    canvas.requestRenderAll();
+  }, [snapEnabledRef.current]);
 
   return (
     <div className="h-full overflow-auto">
