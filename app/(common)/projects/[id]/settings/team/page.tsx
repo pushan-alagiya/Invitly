@@ -2,7 +2,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 import { Separator } from "@/components/ui/separator";
-import { SidebarTrigger } from "@/components/ui/sidebar";
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -196,7 +195,7 @@ export default function Page() {
     <div>
       <header className="flex h-16 items-center justify-between px-4">
         <div className="flex gap-2 items-center">
-          <SidebarTrigger className="-ml-1" />
+          <div className="ml-4"></div>
           <Separator orientation="vertical" className="mr-2 h-4" />
           <Breadcrumb>
             <BreadcrumbList>

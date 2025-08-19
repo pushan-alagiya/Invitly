@@ -8,9 +8,7 @@ import { Label } from "@/components/ui/label";
 import { useFormik } from "formik";
 import * as Yup from "yup";
 import { toast } from "sonner";
-import { BaseClient } from "@/api/ApiClient";
-import { authEndPoint } from "@/utils/apiEndPoints";
-import { setUserDetails } from "@/store/slices/auth";
+import { loginDetails } from "@/store/slices/auth";
 import { useRouter } from "next/navigation";
 import { store } from "@/store";
 
@@ -32,22 +30,101 @@ export function LoginForm({
     },
     validationSchema: LoginSchema,
     onSubmit: async (values, { setSubmitting, setErrors }) => {
+      // Check if user is already logged in and has admin privileges
+      const currentState = store.getState();
+      if (currentState.auth.userDetails) {
+        const currentUserRoles =
+          currentState.auth.userDetails?.user?.roles || [];
+        const isCurrentUserAdmin = currentUserRoles.some(
+          (role: any) =>
+            (typeof role === "string" && role === "ADMIN") ||
+            (typeof role === "object" &&
+              (role.role === "ADMIN" || role.role_name === "ADMIN"))
+        );
+
+        if (isCurrentUserAdmin) {
+          console.log(
+            "User already logged in as admin, redirecting to admin panel"
+          );
+          router.push("/admin");
+          return;
+        }
+      }
       try {
-        const response = await BaseClient.post<any>(`${authEndPoint.login}`, {
-          email: values.email,
-          password: values.password,
-        });
+        const response = await store.dispatch(
+          loginDetails({
+            email: values.email,
+            password: values.password,
+            rememberMe: false,
+          })
+        );
 
-        if (response?.status === 200) {
-          store.dispatch(setUserDetails(response?.data?.data));
+        console.log("Login response:", response);
+        console.log("Response payload:", response?.payload);
+        console.log("Response data:", response?.payload?.data);
+        console.log(
+          "Full response structure:",
+          JSON.stringify(response, null, 2)
+        );
+        console.log("Response.data:", response?.data);
+        console.log("Response.data.code:", response?.data?.code);
+        console.log("Response.data.success:", response?.data?.success);
 
+        // Check for successful response (backend returns code: 200, not status: 200)
+        if (response?.data?.code === 200 || response?.data?.success === true) {
           toast.success("Login successful", {
             description: "Welcome back!",
           });
 
-          router.push("/projects"); // Adjust this route as needed
+          // Wait a moment for Redux state to update, then check admin privileges
+          setTimeout(() => {
+            const state = store.getState();
+            console.log("Login - Redux state after login:", state.auth);
+            console.log("Login - userDetails:", state.auth.userDetails);
+            console.log(
+              "Login - user roles:",
+              state.auth.userDetails?.user?.roles
+            );
+
+            const userRoles = state.auth.userDetails?.user?.roles || [];
+            const isAdmin = userRoles.some(
+              (role: any) =>
+                (typeof role === "string" && role === "ADMIN") ||
+                (typeof role === "object" &&
+                  (role.role === "ADMIN" || role.role_name === "ADMIN"))
+            );
+
+            console.log("Login - isAdmin check result:", isAdmin);
+            console.log(
+              "Login - Role check details:",
+              userRoles.map((role: any) => ({
+                type: typeof role,
+                value: role,
+                role: typeof role === "object" ? role.role : null,
+                role_name: typeof role === "object" ? role.role_name : null,
+              }))
+            );
+
+            if (isAdmin) {
+              console.log("Admin user detected, redirecting to admin panel");
+              router.push("/admin");
+            } else {
+              console.log("Regular user, redirecting to projects");
+              router.push("/projects");
+            }
+          }, 100);
+        } else {
+          // Handle error response
+          const errorMessage =
+            response?.data?.message ||
+            response?.data?.errors?.default ||
+            "Login failed";
+          toast.error("Login Failed", {
+            description: errorMessage,
+          });
         }
       } catch (error) {
+        console.error("Login error:", error);
         if (error instanceof Yup.ValidationError) {
           const errors: { [key: string]: string } = {};
           error.inner.forEach((err) => {
@@ -55,9 +132,14 @@ export function LoginForm({
           });
           setErrors(errors);
         } else {
-          console.error("Login error:", error);
+          const firstErrorKey = Object.keys(
+            (error as any)?.data?.errors || {}
+          )[0];
+          const firstErrorMessage = (error as any)?.data?.errors?.[
+            firstErrorKey
+          ];
           toast.error("Failed to Login", {
-            description: "Invalid email or password",
+            description: firstErrorMessage || "Invalid email or password",
           });
         }
       }
@@ -119,20 +201,6 @@ export function LoginForm({
         <Button type="submit" className="w-full">
           Login
         </Button>
-        {/* <div className="after:border-border relative text-center text-sm after:absolute after:inset-0 after:top-1/2 after:z-0 after:flex after:items-center after:border-t">
-          <span className="bg-background text-muted-foreground relative z-10 px-2">
-            Or continue with
-          </span>
-        </div>
-        <Button variant="outline" className="w-full">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
-            <path
-              d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"
-              fill="currentColor"
-            />
-          </svg>
-          Login with Google
-        </Button> */}
       </div>
       <div className="text-center text-sm">
         Don&apos;t have an account?{" "}

@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
 import { useState, useEffect, useMemo, useCallback } from "react";
@@ -25,6 +26,7 @@ import {
   Edit3,
   Star,
   Magnet,
+  Save,
 } from "lucide-react";
 import { editorState, EditorObject, EditorProject } from "@/lib/editor-state";
 import JsonCanvas from "@/components/editor/JsonCanvas";
@@ -59,11 +61,17 @@ import {
   DialogHeader,
   DialogTitle,
   DialogDescription,
+  DialogFooter,
 } from "@/components/ui/dialog";
 import { imagekitService } from "@/lib/imagekit-service";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Badge } from "@/components/ui/badge";
+import { toast } from "sonner";
 import fabric from "fabric";
+import { BaseClient } from "@/api/ApiClient";
+import { templateEndPoint } from "@/utils/apiEndPoints";
 
 export default function TemplateCreator() {
   const [project, setProject] = useState(editorState.getProject());
@@ -92,10 +100,136 @@ export default function TemplateCreator() {
   >("png");
   const [snapEnabled, setSnapEnabled] = useState(false);
 
+  // Save template states
+  const [showSaveTemplateDialog, setShowSaveTemplateDialog] = useState(false);
+  const [templateName, setTemplateName] = useState("");
+  const [templateDescription, setTemplateDescription] = useState("");
+  const [isDefaultTemplate, setIsDefaultTemplate] = useState(false);
+  const [isSavingTemplate, setIsSavingTemplate] = useState(false);
+
+  // Template state tracking
+  const [currentTemplateId, setCurrentTemplateId] = useState<number | null>(
+    null
+  );
+  const [isTemplateSaved, setIsTemplateSaved] = useState(false);
+  const [originalTemplateName, setOriginalTemplateName] = useState("");
+
+  // Reset template state for new templates
+  const resetTemplateState = () => {
+    setCurrentTemplateId(null);
+    setIsTemplateSaved(false);
+    setOriginalTemplateName("");
+    setTemplateName("");
+    setTemplateDescription("");
+    setIsDefaultTemplate(false);
+  };
+
+  // Get project and event IDs from URL
+  const getProjectAndEventIds = () => {
+    const pathParts = window.location.pathname.split("/");
+    // URL format: /projects/2/events/9/template-creator
+    // pathParts: ["", "projects", "2", "events", "9", "template-creator"]
+    const projectId = pathParts[2]; // Index 2 for "2"
+    const eventId = pathParts[4]; // Index 4 for "9"
+    return { projectId, eventId };
+  };
+
   const currentPage =
     project.pages.find((p) => p.id === selectedPageId) || null;
   const selectedObject =
     currentPage?.objects.find((obj) => obj.id === selectedObjectId) || null;
+
+  // Save template function
+  const saveTemplate = async () => {
+    if (!templateName.trim()) {
+      toast.error("Please enter a template name");
+      return;
+    }
+
+    setIsSavingTemplate(true);
+    try {
+      const { projectId, eventId } = getProjectAndEventIds();
+
+      // Prepare template data
+      const templateData = {
+        ...project,
+        metadata: {
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          version: "1.0.0",
+        },
+      };
+
+      let response;
+
+      if (isTemplateSaved && currentTemplateId) {
+        // Update existing template
+        response = await BaseClient.put<any>(
+          `${templateEndPoint.updateTemplate}/${currentTemplateId}`,
+          {
+            project_id: parseInt(projectId),
+            event_id: parseInt(eventId),
+            name: templateName.trim(),
+            template_data: templateData,
+            is_default: isDefaultTemplate,
+          }
+        );
+      } else {
+        // Create new template
+        response = await BaseClient.post<any>(templateEndPoint.createTemplate, {
+          project_id: parseInt(projectId),
+          event_id: parseInt(eventId),
+          name: templateName.trim(),
+          template_data: templateData,
+          is_default: isDefaultTemplate,
+        });
+
+        // Set template state for new template
+        if (response.data.success) {
+          setCurrentTemplateId(response.data.data.id);
+          setIsTemplateSaved(true);
+          setOriginalTemplateName(templateName.trim());
+        }
+      }
+
+      if (response.data.success) {
+        const action = isTemplateSaved ? "updated" : "saved";
+        toast.success(`Template ${action} successfully!`);
+        setShowSaveTemplateDialog(false);
+
+        // Don't clear the form for saved templates, just close dialog
+        if (!isTemplateSaved) {
+          setTemplateName("");
+          setTemplateDescription("");
+          setIsDefaultTemplate(false);
+        }
+      } else {
+        toast.error(
+          response.data.message ||
+            `Failed to ${isTemplateSaved ? "update" : "save"} template`
+        );
+      }
+    } catch (error: unknown) {
+      console.error("Error saving template:", error);
+      const errorMessage =
+        error instanceof Error
+          ? error.message
+          : error &&
+            typeof error === "object" &&
+            "response" in error &&
+            error.response &&
+            typeof error.response === "object" &&
+            "data" in error.response &&
+            error.response.data &&
+            typeof error.response.data === "object" &&
+            "message" in error.response.data
+          ? String(error.response.data.message)
+          : `Failed to ${isTemplateSaved ? "update" : "save"} template`;
+      toast.error(errorMessage);
+    } finally {
+      setIsSavingTemplate(false);
+    }
+  };
 
   // Export functions - defined early so they're available for memoized components
   const exportAsPNG = useCallback(() => {
@@ -432,8 +566,51 @@ export default function TemplateCreator() {
     };
 
     const unsubscribe = editorState.subscribe(handleProjectUpdate);
+
+    // Check if there's a template ID to load from URL params
+    const urlParams = new URLSearchParams(window.location.search);
+    const templateId = urlParams.get("templateId");
+
+    if (templateId) {
+      loadTemplateFromAPI(templateId);
+      // Clean up the URL
+      const newUrl = window.location.pathname;
+      window.history.replaceState({}, "", newUrl);
+    } else {
+      // Reset template state for new templates
+      resetTemplateState();
+    }
+
     return unsubscribe;
   }, []);
+
+  // Load template from API
+  const loadTemplateFromAPI = async (templateId: string) => {
+    try {
+      const response = await BaseClient.get<any>(
+        `${templateEndPoint.getTemplate}/${templateId}`
+      );
+      if (response?.data?.success) {
+        const template = response.data.data;
+        editorState.importProject(JSON.stringify(template.template_data));
+
+        // Set template state for existing template
+        setCurrentTemplateId(template.id);
+        setIsTemplateSaved(true);
+        setOriginalTemplateName(template.name);
+        setTemplateName(template.name);
+        setTemplateDescription(template.description || "");
+        setIsDefaultTemplate(template.is_default);
+
+        toast.success(`Template "${template.name}" loaded successfully!`);
+      } else {
+        toast.error("Failed to load template");
+      }
+    } catch (error) {
+      console.error("Error loading template:", error);
+      toast.error("Failed to load template");
+    }
+  };
 
   // Drag and drop handlers
   const handleDragStart = (e: React.DragEvent, pageId: string) => {
@@ -763,7 +940,7 @@ export default function TemplateCreator() {
           case "s":
             if (isCtrlOrCmd) {
               e.preventDefault();
-              saveProject();
+              setShowSaveTemplateDialog(true);
               handled = true;
             }
             break;
@@ -853,7 +1030,10 @@ export default function TemplateCreator() {
         { key: "Ctrl/Cmd + Z", description: "Undo" },
         { key: "Ctrl/Cmd + Shift + Z", description: "Redo" },
         { key: "Ctrl/Cmd + Y", description: "Redo" },
-        { key: "Ctrl/Cmd + S", description: "Save project" },
+        {
+          key: "Ctrl/Cmd + S",
+          description: isTemplateSaved ? "Update template" : "Save as template",
+        },
       ],
     },
     {
@@ -1821,15 +2001,7 @@ export default function TemplateCreator() {
                 <Layers className="w-3 h-3 lg:w-4 lg:h-4 mr-1 lg:mr-2" />
                 <span className="hidden sm:inline">Layers</span>
               </Button>
-              {/* <Button
-                variant="outline"
-                size="sm"
-                onClick={saveProject}
-                className="h-8 px-2 lg:px-3"
-              >
-                <Save className="w-3 h-3 lg:w-4 lg:h-4 mr-1 lg:mr-2" />
-                <span className="hidden sm:inline">Save</span>
-              </Button> */}
+
               <Button
                 variant="outline"
                 size="sm"
@@ -1839,13 +2011,28 @@ export default function TemplateCreator() {
                 <Download className="w-3 h-3 lg:w-4 lg:h-4 mr-1 lg:mr-2" />
                 <span className="hidden sm:inline">Export</span>
               </Button>
+
+              <Separator orientation="vertical" className="h-8" />
+
+              {/* Save Template Button */}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowSaveTemplateDialog(true)}
+                className="h-8 px-2 lg:px-3"
+              >
+                <Save className="w-3 h-3 lg:w-4 lg:h-4 mr-1 lg:mr-2" />
+                <span className="hidden sm:inline">
+                  {isTemplateSaved ? "Update Template" : "Save Template"}
+                </span>
+              </Button>
             </div>
           </div>
         </div>
 
         {/* Canvas Area */}
-        <div className="flex-1 overflow-auto relative min-h-0 max-w-[calc(100%-318px)]">
-          <div className="p-2 lg:p-6 min-h-full">
+        <div className="flex-1 overflow-auto overflow-y-scroll relative h-full max-w-[calc(100%-318px)] max-h-[calc(100vh-126px)]">
+          <div className="p-2 lg:p-6 h-full">
             {currentPage ? (
               <JsonCanvas
                 page={currentPage}
@@ -2186,6 +2373,142 @@ export default function TemplateCreator() {
               Cancel
             </Button>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Save Template Dialog */}
+      <Dialog
+        open={showSaveTemplateDialog}
+        onOpenChange={setShowSaveTemplateDialog}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              {isTemplateSaved ? "Update Template" : "Save as Template"}
+            </DialogTitle>
+            <DialogDescription>
+              {isTemplateSaved
+                ? "Update your existing template with the current design."
+                : "Save your current design as a reusable template for this event."}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            {/* Template Name */}
+            <div>
+              <Label
+                htmlFor="template-name"
+                className="text-sm font-medium text-gray-700"
+              >
+                Template Name *
+              </Label>
+              <Input
+                id="template-name"
+                placeholder="Enter template name"
+                value={templateName}
+                onChange={(e) => setTemplateName(e.target.value)}
+                className="mt-1"
+              />
+              {isTemplateSaved && originalTemplateName !== templateName && (
+                <p className="text-xs text-blue-600 mt-1">
+                  Original name: {originalTemplateName}
+                </p>
+              )}
+            </div>
+
+            {/* Template Description */}
+            <div>
+              <Label
+                htmlFor="template-description"
+                className="text-sm font-medium text-gray-700"
+              >
+                Description (Optional)
+              </Label>
+              <Textarea
+                id="template-description"
+                placeholder="Describe your template..."
+                value={templateDescription}
+                onChange={(e) => setTemplateDescription(e.target.value)}
+                className="mt-1"
+                rows={3}
+              />
+            </div>
+
+            {/* Template Info */}
+            <div className="bg-gray-50 p-3 rounded-lg">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-sm font-medium text-gray-700">
+                  Template Info
+                </span>
+                <Badge variant="secondary" className="text-xs">
+                  {project.pages.length} page
+                  {project.pages.length !== 1 ? "s" : ""}
+                </Badge>
+              </div>
+              <div className="text-xs text-gray-600 space-y-1">
+                <div>Project: {project.name}</div>
+                <div>Pages: {project.pages.map((p) => p.name).join(", ")}</div>
+                <div>
+                  Objects:{" "}
+                  {project.pages.reduce(
+                    (total, page) => total + page.objects.length,
+                    0
+                  )}{" "}
+                  total
+                </div>
+                {isTemplateSaved && (
+                  <div className="text-blue-600 font-medium">
+                    Template ID: {currentTemplateId}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Default Template Option */}
+            <div className="flex items-center space-x-2">
+              <input
+                type="checkbox"
+                id="default-template"
+                checked={isDefaultTemplate}
+                onChange={(e) => setIsDefaultTemplate(e.target.checked)}
+                className="rounded"
+              />
+              <Label
+                htmlFor="default-template"
+                className="text-sm text-gray-700"
+              >
+                Set as default template for this event
+              </Label>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowSaveTemplateDialog(false);
+                if (!isTemplateSaved) {
+                  setTemplateName("");
+                  setTemplateDescription("");
+                  setIsDefaultTemplate(false);
+                }
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={saveTemplate}
+              disabled={!templateName.trim() || isSavingTemplate}
+            >
+              {isSavingTemplate
+                ? isTemplateSaved
+                  ? "Updating..."
+                  : "Saving..."
+                : isTemplateSaved
+                ? "Update Template"
+                : "Save Template"}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

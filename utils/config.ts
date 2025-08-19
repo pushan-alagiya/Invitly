@@ -5,7 +5,7 @@ interface IConfig {
 }
 
 export const config: IConfig = {
-  BASE_URL: process.env.NEXT_PUBLIC_BASE_URL as string,
-  APP_NAME: process.env.NEXT_PUBLIC_APP_NAME as string,
-  APP_VERSION: process.env.NEXT_PUBLIC_VERSION as string,
+  BASE_URL: process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:8001/api",
+  APP_NAME: process.env.NEXT_PUBLIC_APP_NAME || "Invity",
+  APP_VERSION: process.env.NEXT_PUBLIC_VERSION || "v1",
 };

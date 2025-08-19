@@ -23,6 +23,7 @@ interface FabricObjectWithData extends fabric.Object {
     isRuler?: boolean;
     isUnderline?: boolean;
     hasUnderline?: boolean;
+    isSnapLine?: boolean;
   };
   isMoving?: boolean;
   iconSvg?: string;
@@ -47,6 +48,8 @@ export default function JsonCanvas({
   const moveUpdateTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const isDraggingRef = useRef(false);
   const snapEnabledRef = useRef(snapEnabled);
+  const lastClickTimeRef = useRef<number>(0);
+  const lastClickTargetIdRef = useRef<string | null>(null);
 
   // Track Fabric.js objects by their object IDs for efficient updates
   const fabricObjectsRef = useRef<Map<string, FabricObjectWithData>>(new Map());
@@ -848,9 +851,10 @@ export default function JsonCanvas({
       );
     }
 
-    const fabricObject = new fabric.Text(displayText, {
+    const textOptions = {
       left: obj.left || 0,
       top: obj.top || 0,
+      width: obj.width || 300,
       fontSize: obj.fontSize || 24,
       fontFamily: obj.fontFamily || "Arial",
       fontWeight: obj.fontWeight || "normal",
@@ -866,7 +870,22 @@ export default function JsonCanvas({
       scaleX: obj.scaleX || 1,
       scaleY: obj.scaleY || 1,
       editable: true,
-    }) as FabricObjectWithData;
+    } as const;
+
+    let textObj: fabric.Object;
+    if ((fabric as unknown as { Textbox?: typeof fabric.Textbox }).Textbox) {
+      textObj = new (
+        fabric as unknown as { Textbox: typeof fabric.Textbox }
+      ).Textbox(displayText, textOptions as any);
+    } else if ((fabric as unknown as { IText?: typeof fabric.IText }).IText) {
+      textObj = new (fabric as unknown as { IText: typeof fabric.IText }).IText(
+        displayText,
+        textOptions as any
+      );
+    } else {
+      textObj = new fabric.Text(displayText, textOptions as any);
+    }
+    const fabricObject = textObj as FabricObjectWithData;
 
     // Set textDecoration property correctly
     if (obj.textDecoration === "underline") {
@@ -1544,7 +1563,11 @@ export default function JsonCanvas({
         scaleY: target.scaleY || 1,
       };
 
-      if (target.type === "text") {
+      if (
+        target.type === "text" ||
+        target.type === "textbox" ||
+        target.type === "i-text"
+      ) {
         const textObj = target as fabric.Text;
         // Don't update the text content to avoid word spacing feedback loop
         // updates.text = textObj.text || "";
@@ -1880,10 +1903,61 @@ export default function JsonCanvas({
     // Add double-click event for text editing
     canvas.on("mouse:dblclick", (e) => {
       const target = e.target as FabricObjectWithData;
-      if (target && target.type === "text" && target.data?.objectId) {
-        // Enter text editing mode using canvas methods
+      if (
+        target &&
+        (target.type === "textbox" ||
+          target.type === "i-text" ||
+          target.type === "text") &&
+        target.data?.objectId
+      ) {
         canvas.setActiveObject(target);
-        canvas.renderAll();
+        // Enter interactive editing mode
+        (
+          target as unknown as {
+            enterEditing: () => void;
+            selectAll: () => void;
+          }
+        ).enterEditing?.();
+        (target as unknown as { selectAll: () => void }).selectAll?.();
+        canvas.requestRenderAll();
+      }
+    });
+
+    // Manual double-click fallback detection for reliability
+    canvas.on("mouse:down", (e) => {
+      const target = e.target as FabricObjectWithData;
+      const now = Date.now();
+      if (
+        target &&
+        (target.type === "textbox" ||
+          target.type === "i-text" ||
+          target.type === "text") &&
+        target.data?.objectId
+      ) {
+        const isSameTarget =
+          lastClickTargetIdRef.current === target.data.objectId;
+        if (isSameTarget && now - lastClickTimeRef.current < 300) {
+          // Treat as double click
+          canvas.setActiveObject(target);
+          (
+            target as unknown as {
+              enterEditing: () => void;
+              selectAll: () => void;
+            }
+          ).enterEditing?.();
+          (target as unknown as { selectAll: () => void }).selectAll?.();
+          canvas.requestRenderAll();
+          // Reset
+          lastClickTimeRef.current = 0;
+          lastClickTargetIdRef.current = null;
+        } else {
+          lastClickTimeRef.current = now;
+          lastClickTargetIdRef.current = target.data.objectId || null;
+        }
+      } else {
+        // Clicked non-text; reset tracking
+        lastClickTimeRef.current = 0;
+        lastClickTargetIdRef.current = null;
       }
     });
 
@@ -2003,7 +2077,11 @@ export default function JsonCanvas({
         case "B":
           if (e.ctrlKey || e.metaKey) {
             e.preventDefault();
-            if (fabricObj.type === "text") {
+            if (
+              fabricObj.type === "text" ||
+              fabricObj.type === "textbox" ||
+              fabricObj.type === "i-text"
+            ) {
               const textObj = fabricObj as fabric.Text;
               const newWeight =
                 textObj.fontWeight === "bold" ? "normal" : "bold";
@@ -2016,7 +2094,11 @@ export default function JsonCanvas({
         case "I":
           if (e.ctrlKey || e.metaKey) {
             e.preventDefault();
-            if (fabricObj.type === "text") {
+            if (
+              fabricObj.type === "text" ||
+              fabricObj.type === "textbox" ||
+              fabricObj.type === "i-text"
+            ) {
               const textObj = fabricObj as fabric.Text;
               const newStyle =
                 textObj.fontStyle === "italic" ? "normal" : "italic";
@@ -2029,7 +2111,11 @@ export default function JsonCanvas({
         case "U":
           if (e.ctrlKey || e.metaKey) {
             e.preventDefault();
-            if (fabricObj.type === "text") {
+            if (
+              fabricObj.type === "text" ||
+              fabricObj.type === "textbox" ||
+              fabricObj.type === "i-text"
+            ) {
               const textObj = fabricObj as fabric.Text;
               const newDecoration =
                 (textObj as fabric.Text & { textDecoration?: string })
@@ -2498,14 +2584,21 @@ export default function JsonCanvas({
     y2: number,
     color: string = SNAP_LINE_COLOR
   ) {
-    const line = new fabric.Line([x1, y1, x2, y2], {
+    const line: fabric.Line = new fabric.Line([x1, y1, x2, y2], {
       stroke: color,
-      strokeWidth: 2,
+      strokeWidth: 3,
       selectable: false,
       evented: false,
       excludeFromExport: true,
       hoverCursor: "default",
+      opacity: 1,
+      strokeLineCap: "round",
+      strokeLineJoin: "round",
     });
+    (line as unknown as FabricObjectWithData).data = {
+      ...((line as unknown as FabricObjectWithData).data || {}),
+      isSnapLine: true,
+    };
     canvas.add(line);
     snapLines.push(line);
   }
@@ -2564,7 +2657,8 @@ export default function JsonCanvas({
       if (
         obj === movingObj ||
         fabricObj.data?.isGridLine ||
-        fabricObj.data?.isRuler
+        fabricObj.data?.isRuler ||
+        fabricObj.data?.isSnapLine
       )
         return;
       const b = getObjectBounds(obj);
@@ -2600,7 +2694,7 @@ export default function JsonCanvas({
     // Clear any existing snap lines when snap is toggled
     clearSnapLines(canvas);
     canvas.requestRenderAll();
-  }, [snapEnabledRef.current]);
+  }, [snapEnabled]);
 
   return (
     <div className="h-full overflow-auto">

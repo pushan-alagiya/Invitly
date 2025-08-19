@@ -4,17 +4,30 @@ import { authEndPoint } from "@/utils/apiEndPoints";
 import { createSlice } from "@reduxjs/toolkit";
 import { store, updatePersistedReducer } from "../index";
 
+interface IPermission {
+  resource: string;
+  action: string;
+  description: string;
+}
+
 interface IUserDetails {
   user: {
     id?: number;
     name?: string;
     email: string;
-    phone?: string;
-    role?: string;
-    subscription_status?: string;
+    phone_number?: string;
+    roles?: (string | { id: number; role_name: string; is_premium: boolean })[];
+    permissions?: IPermission[];
     status?: string;
     profile_picture?: string;
-    permissioins?: any[];
+    address?: string;
+    city?: string;
+    state?: string;
+    zip_code?: string;
+    office_phone?: string;
+    company_id?: number;
+    channel_id?: number;
+    is_verified?: boolean;
   };
   token: string;
 }
@@ -42,7 +55,20 @@ const AuthSlice = createSlice({
     },
     updateUserDetails: (state, action) => {
       if (state.userDetails) {
-        state.userDetails.user = action.payload;
+        state.userDetails.user = {
+          ...state.userDetails.user,
+          ...action.payload,
+        };
+      }
+    },
+    updateUserPermissions: (state, action) => {
+      if (state.userDetails && state.userDetails.user) {
+        state.userDetails.user.permissions = action.payload;
+      }
+    },
+    updateUserRoles: (state, action) => {
+      if (state.userDetails && state.userDetails.user) {
+        state.userDetails.user.roles = action.payload;
       }
     },
     logout: (state) => {
@@ -57,6 +83,8 @@ export const {
   setRememberMe,
   updateUserDetails,
   setUserProfileImage,
+  updateUserPermissions,
+  updateUserRoles,
   logout,
 } = AuthSlice.actions;
 
@@ -71,11 +99,37 @@ export const loginDetails = (payload: {
         email: payload.email,
         password: payload.password,
       });
-      if (result?.status === 200) {
+      // Check for successful response (backend returns code: 200, not status: 200)
+      if (result?.status === 200 && result?.data?.code === 200) {
         store.dispatch(AuthSlice.actions.setRememberMe(payload.rememberMe));
         store.dispatch(AuthSlice.actions.setUserDetails(result?.data?.data));
       }
-      if (result.data.data.token) {
+      return result;
+    } catch (error) {
+      console.log(error);
+      return error;
+    }
+  };
+};
+
+export const registerUser = (payload: {
+  name: string;
+  email: string;
+  password: string;
+  phone_number?: string;
+  address?: string;
+  city?: string;
+  state?: string;
+  zip_code?: string;
+  office_phone?: string;
+  company_id?: number;
+  channel_id?: number;
+}) => {
+  return async () => {
+    try {
+      const result: any = await BaseClient.post(authEndPoint.register, payload);
+      // Check for successful response (backend returns code: 200, not status: 200)
+      if (result?.status === 200 && result?.data?.code === 200) {
         store.dispatch(AuthSlice.actions.setUserDetails(result?.data?.data));
       }
       return result;

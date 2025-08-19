@@ -15,6 +15,7 @@ import {
   Users,
   ChevronLeft,
   ChevronRight,
+  Shield,
 } from "lucide-react";
 
 import { NavMain } from "@/components/nav-main";
@@ -90,7 +91,7 @@ interface getProjectDetails {
   code: number;
 }
 
-interface EvenetInterface {
+interface EventInterface {
   id: number;
   project_id: number;
   name: string;
@@ -108,7 +109,7 @@ interface EvenetInterface {
 interface getEventDetails {
   success: boolean;
   data: {
-    rows: EvenetInterface[];
+    rows: EventInterface[];
     count: number;
   };
   message: string;
@@ -154,35 +155,41 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     accessUsers: [],
   });
 
-  const hasReadPermission = projectDetails.accessUsers.some(
-    (accessUser) =>
-      accessUser.user_id === user?.id && accessUser.permission?.id === 1
-  );
+  const hasReadPermission =
+    projectDetails.accessUsers?.some(
+      (accessUser) =>
+        accessUser.user_id === user?.id && accessUser.permission?.id === 1
+    ) || false;
 
-  const hasWritePermission = projectDetails.accessUsers.some(
-    (accessUser) =>
-      accessUser.user_id === user?.id && accessUser.permission.id === 2
-  );
+  const hasWritePermission =
+    projectDetails.accessUsers?.some(
+      (accessUser) =>
+        accessUser.user_id === user?.id && accessUser.permission?.id === 2
+    ) || false;
 
-  const hasEditPermission = projectDetails.accessUsers.some(
-    (accessUser) =>
-      accessUser.user_id === user?.id && accessUser.permission.id === 3
-  );
+  const hasEditPermission =
+    projectDetails.accessUsers?.some(
+      (accessUser) =>
+        accessUser.user_id === user?.id && accessUser.permission?.id === 3
+    ) || false;
 
-  const hasAddMemberPermission = projectDetails.accessUsers.some(
-    (accessUser) =>
-      accessUser.user_id === user?.id && accessUser.permission.id === 4
-  );
+  const hasAddMemberPermission =
+    projectDetails.accessUsers?.some(
+      (accessUser) =>
+        accessUser.user_id === user?.id && accessUser.permission?.id === 4
+    ) || false;
 
-  const hasDeletePermission = projectDetails.accessUsers.some(
-    (accessUser) =>
-      accessUser.user_id === user?.id && accessUser.permission.id === 5
-  );
+  const hasDeletePermission =
+    projectDetails.accessUsers?.some(
+      (accessUser) =>
+        accessUser.user_id === user?.id && accessUser.permission?.id === 5
+    ) || false;
 
-  const hasManageRolesPermission = projectDetails.accessUsers.some(
-    (accessUser) =>
-      accessUser.user_id === user?.id && accessUser.permission.id === 6
-  );
+  const hasManageRolesPermission =
+    projectDetails.accessUsers?.some(
+      (accessUser) =>
+        accessUser.user_id === user?.id && accessUser.permission?.id === 6
+    ) || false;
 
   const [projects, setProjects] = useState<{
     rows: ProjectInterface[];
@@ -193,7 +200,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   });
 
   const [events, setEvents] = useState<{
-    rows: EvenetInterface[];
+    rows: EventInterface[];
     count: number;
   }>({
     rows: [],
@@ -249,19 +256,30 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const fetchEvents = async (projectId: number) => {
     setEventLoading(true);
     try {
+      console.log("fetchEvents called with projectId:", projectId);
+      console.log("Using endpoint:", `${eventEndPoint.getEvents}/${projectId}`);
+
       const response = await BaseClient.get<getEventDetails>(
-        `${eventEndPoint?.getEvent}/${projectId}`
+        `${eventEndPoint.getEvents}/${projectId}`
       );
+
+      console.log("Events API response:", response);
 
       if (response?.data?.success) {
         setEvents(response?.data?.data);
+        console.log("Events set successfully:", response?.data?.data);
       } else {
-        console.error("Error fetching events: ", response);
+        console.error(
+          "Error fetching events - API returned failure:",
+          response?.data
+        );
+        setEvents({ rows: [], count: 0 });
       }
 
       dispatch(eventChange());
     } catch (error) {
-      console.error("Error fetching events: ", error);
+      console.error("Error fetching events:", error);
+      setEvents({ rows: [], count: 0 });
     } finally {
       setEventLoading(false);
     }
@@ -298,24 +316,45 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       avatar: "/avatars/shadcn.jpg",
     },
     navMain: [
+      // Add admin navigation for admin users
+      ...(user?.roles?.some(
+        (role: string | { role?: string; role_name?: string }) =>
+          (typeof role === "string" && role === "ADMIN") ||
+          (typeof role === "object" &&
+            (role.role === "ADMIN" || role.role_name === "ADMIN"))
+      )
+        ? [
+            {
+              title: "Admin Panel",
+              url: "/admin",
+              icon: Shield,
+              isActive: pathName?.includes("/admin"),
+            },
+          ]
+        : []),
       ...(params?.id
         ? [
             {
               title: "Events",
               url: `/projects/${params.id}`,
               icon: CalendarDays,
-              isActive: false, // Keep events collapsed when on settings
+              isActive:
+                pathName?.includes(`/projects/${params.id}`) &&
+                !pathName?.includes("/guests") &&
+                !pathName?.includes("/settings") &&
+                !pathName?.includes("/template-creator"),
               items: events?.rows?.map((event) => ({
                 title: event?.name,
                 url: `/projects/${event?.project_id}/events/${event?.id}`,
                 logo: event?.logo ?? undefined,
+                isActive: pathName?.includes(`/events/${event?.id}`),
               })),
             },
             {
               title: "Guests",
               url: `/projects/${params.id}/guests`,
               icon: Users,
-              isActive: false,
+              isActive: pathName?.includes("/guests"),
             },
           ]
         : []),
@@ -348,31 +387,18 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         ? [
             {
               title: "Settings",
-              url: "#",
+              url: `/projects/${params.id}/settings`,
               icon: Settings2,
               isActive: isSettingsPage, // Expand settings when on settings page
               items: [
-                ...(hasWritePermission
-                  ? [
-                      {
-                        title: "General",
-                        url: params.id
-                          ? `/projects/${params.id}/settings/general`
-                          : "#",
-                      },
-                    ]
-                  : []),
-
-                ...(hasAddMemberPermission && hasManageRolesPermission
-                  ? [
-                      {
-                        title: "Team",
-                        url: params.id
-                          ? `/projects/${params.id}/settings/team`
-                          : "#",
-                      },
-                    ]
-                  : []),
+                {
+                  title: "General Settings",
+                  url: `/projects/${params.id}/settings/general`,
+                },
+                {
+                  title: "Access Settings",
+                  url: `/projects/${params.id}/settings/access`,
+                },
               ],
             },
           ]
@@ -425,7 +451,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         variant="outline"
         size="sm"
         onClick={() => setIsCollapsed(!isCollapsed)}
-        className="h-8 w-8 p-0 border-l-0 rounded-l-none hover:bg-gray-100 absolute backdrop-blur-xs top-0 bg-primary/10 right-0 z-10 translate-x-8"
+        className="h-8 w-8 p-0 border-l-0 rounded-l-none hover:bg-gray-100 absolute backdrop-blur-xs top-3 bg-primary/10 right-0 z-10 translate-x-8"
         title={isCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
       >
         {isCollapsed ? (

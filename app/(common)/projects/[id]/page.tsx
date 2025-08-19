@@ -11,9 +11,12 @@ import {
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
 import { Separator } from "@/components/ui/separator";
-import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Skeleton } from "@/components/ui/skeleton";
-import { eventEndPoint, guestEndPoint } from "@/utils/apiEndPoints";
+import {
+  eventEndPoint,
+  guestEndPoint,
+  templateEndPoint,
+} from "@/utils/apiEndPoints";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import Image from "next/image";
@@ -27,14 +30,11 @@ import {
 import { Button } from "@/components/ui/button";
 import { useRouter } from "next/navigation";
 import { AddEventDialog } from "@/components/project/create_event";
-import { useSelector } from "react-redux";
-import { RootState } from "@/store";
-import { resetEvent } from "@/store/slices/event";
-import { useDispatch } from "react-redux";
-import { GalleryVerticalEnd } from "lucide-react";
+import { GalleryVerticalEnd, FileText, Edit3, Star, Plus } from "lucide-react";
 import { DeleteEventDialog } from "@/components/project/delete_event";
 import { GuestTable } from "@/components/project/guest_table";
 import { AddGuestDialog } from "@/components/project/add_guest";
+import { Badge } from "@/components/ui/badge";
 
 export type EventInterface = {
   id: number;
@@ -84,10 +84,33 @@ interface GetGuestsInterface {
   code: number;
 }
 
+interface Template {
+  id: number;
+  project_id: number;
+  event_id: number;
+  name: string;
+  template_data: any;
+  version: string;
+  status: string;
+  is_default: boolean;
+  created_by: number;
+  updated_by: number;
+  created_at: string;
+  updated_at: string;
+  event?: {
+    id: number;
+    name: string;
+  };
+  creator?: {
+    id: number;
+    name: string;
+    email: string;
+  };
+}
+
 export default function Page() {
   const params = useParams();
   const router = useRouter();
-  const dispatch = useDispatch();
   const [recentEvents, setRecentEvents] = useState<{
     rows: EventInterface[];
     count: number;
@@ -108,9 +131,9 @@ export default function Page() {
 
   const [guestsLoading, setGuestsLoading] = useState<boolean>(false);
 
-  const eventChanged = useSelector(
-    (state: RootState) => state.event.eventChanged
-  );
+  // Template state
+  const [recentTemplates, setRecentTemplates] = useState<Template[]>([]);
+  const [templatesLoading, setTemplatesLoading] = useState<boolean>(false);
 
   useEffect(() => {
     const fetchRecentEvents = async () => {
@@ -132,36 +155,68 @@ export default function Page() {
       }
     };
 
-    fetchRecentEvents();
-
-    dispatch(resetEvent());
-  }, [eventChanged, params?.id]);
+    if (params?.id) {
+      fetchRecentEvents();
+      fetchGuests();
+      fetchRecentTemplates();
+    }
+  }, [params?.id]);
 
   const fetchGuests = async () => {
+    setGuestsLoading(true);
     try {
-      setGuestsLoading(true);
       const response = await BaseClient.get<GetGuestsInterface>(
         `${guestEndPoint.getProjectGuests}/${params?.id}`
       );
-
       if (response?.data?.success) {
-        setGuests({
-          rows: response?.data?.data?.rows,
-          count: response?.data?.data?.count,
-        });
+        // Handle both cases: when guests exist and when the list is empty
+        const guestData = response.data.data;
+        if (guestData && guestData.rows) {
+          setGuests(guestData);
+        } else {
+          // Set empty guests structure when no guests exist
+          setGuests({ rows: [], count: 0 });
+        }
       } else {
-        console.error("Error fetching guests: ", response);
+        // Set empty guests structure when API returns success: false
+        setGuests({ rows: [], count: 0 });
       }
     } catch (error) {
-      console.error("Error fetching guests: ", error);
+      console.error("Error fetching guests:", error);
+      // Set empty guests structure on error
+      setGuests({ rows: [], count: 0 });
     } finally {
       setGuestsLoading(false);
     }
   };
 
-  useEffect(() => {
-    fetchGuests();
-  }, [params?.id]);
+  const fetchRecentTemplates = async () => {
+    setTemplatesLoading(true);
+    try {
+      const response = await BaseClient.get<any>(
+        `${templateEndPoint.getRecentProjectTemplates}/${params?.id}/recent`
+      );
+      if (response?.data?.success) {
+        // Handle both cases: when templates exist and when the list is empty
+        const templateData = response.data.data;
+        if (templateData && Array.isArray(templateData)) {
+          setRecentTemplates(templateData);
+        } else {
+          // Set empty templates array when no templates exist
+          setRecentTemplates([]);
+        }
+      } else {
+        // Set empty templates array when API returns success: false
+        setRecentTemplates([]);
+      }
+    } catch (error) {
+      console.error("Error fetching recent templates:", error);
+      // Set empty templates array on error
+      setRecentTemplates([]);
+    } finally {
+      setTemplatesLoading(false);
+    }
+  };
 
   const handleGuestUpdate = () => {
     fetchGuests();
@@ -172,7 +227,8 @@ export default function Page() {
       <header className="flex h-16 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12">
         <div className="flex items-center justify-between px-4 w-full">
           <div className="flex items-center gap-2">
-            <SidebarTrigger className="-ml-1" />
+            {/* <SidebarTrigger className="-ml-1" /> */}
+            <div className="ml-4"></div>
             <Separator
               orientation="vertical"
               className="mr-2 data-[orientation=vertical]:h-4"
@@ -355,6 +411,128 @@ export default function Page() {
       </div>
 
       <Separator className="px-6" />
+      {/* Project Recent Templates */}
+      <div className="flex flex-1 flex-col gap-4 p-6">
+        <div className="flex flex-col gap-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-xl font-semibold">Project Recent Templates</h2>
+          </div>
+
+          {templatesLoading ? (
+            <div className="flex flex-col items-center justify-center h-40">
+              <p className="text-lg font-semibold text-muted">
+                Loading templates...
+              </p>
+            </div>
+          ) : recentTemplates.length > 0 ? (
+            <div className="space-y-3">
+              {recentTemplates.map((template) => (
+                <div
+                  key={template.id}
+                  className="flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-lg border bg-card hover:bg-accent/50 transition-colors group gap-3"
+                >
+                  <div className="flex items-start sm:items-center gap-3 flex-1 min-w-0">
+                    <div className="flex-shrink-0 mt-1 sm:mt-0">
+                      <FileText className="h-4 w-4 text-muted-foreground" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex flex-wrap items-center gap-2 mb-2">
+                        <h4 className="text-sm font-medium truncate">
+                          {template.name}
+                        </h4>
+                        {template.is_default && (
+                          <Badge
+                            variant="default"
+                            className="text-xs px-1 py-0"
+                          >
+                            <Star className="h-2.5 w-2.5 mr-1" />
+                            Default
+                          </Badge>
+                        )}
+                        <Badge variant="outline" className="text-xs px-1 py-0">
+                          {template.status}
+                        </Badge>
+                      </div>
+                      <div className="grid grid-cols-2 sm:flex sm:items-center gap-2 sm:gap-4 text-xs text-muted-foreground">
+                        <span className="flex items-center gap-1">
+                          <span className="font-medium">
+                            v{template.version}
+                          </span>
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <span className="font-medium">
+                            {template.template_data?.pages?.length || 0}
+                          </span>
+                          <span>pages</span>
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <span className="font-medium">
+                            {template.template_data?.pages?.reduce(
+                              (total: number, page: any) =>
+                                total + (page.objects?.length || 0),
+                              0
+                            ) || 0}
+                          </span>
+                          <span>objects</span>
+                        </span>
+                        {template.event && (
+                          <span className="flex items-center gap-1 col-span-2 sm:col-span-1">
+                            <span className="font-medium">Event:</span>
+                            <span className="truncate">
+                              {template.event.name}
+                            </span>
+                          </span>
+                        )}
+                        <span className="flex items-center gap-1 col-span-2 sm:col-span-1">
+                          <span className="font-medium">
+                            {new Date(template.created_at).toLocaleDateString()}
+                          </span>
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between sm:justify-end gap-2 flex-shrink-0">
+                    {template.creator && (
+                      <span className="text-xs text-muted-foreground hidden sm:block">
+                        by {template.creator.name}
+                      </span>
+                    )}
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-8 w-8 p-0 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
+                      onClick={() => {
+                        window.location.href = `/projects/${params.id}/events/${template.event_id}/template-creator?templateId=${template.id}`;
+                      }}
+                    >
+                      <Edit3 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="flex flex-col items-center justify-center h-32">
+              <FileText className="h-8 w-8 mx-auto mb-2 text-muted-foreground/50" />
+              <h3 className="text-sm font-medium mb-1">No templates yet</h3>
+              <p className="text-xs text-muted-foreground mb-3">
+                Create your first invitation template to get started.
+              </p>
+              <Button
+                size="sm"
+                onClick={() => {
+                  window.location.href = `/projects/${params.id}`;
+                }}
+              >
+                <Plus className="h-3 w-3 mr-1" />
+                Create Template
+              </Button>
+            </div>
+          )}
+        </div>
+      </div>
+
+      <Separator className="px-6" />
 
       <div className="flex flex-1 flex-col gap-4 p-6 ">
         <div className="flex flex-col gap-4">
@@ -379,6 +557,7 @@ export default function Page() {
               projectId={Number(params?.id)}
               guests={guests.rows}
               onGuestUpdate={handleGuestUpdate}
+              language="en"
             />
           ) : (
             <div className="flex flex-col items-center justify-center h-40">

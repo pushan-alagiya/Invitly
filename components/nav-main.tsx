@@ -37,6 +37,7 @@ export function NavMain({
       title: string;
       url: string;
       logo?: string;
+      isActive?: boolean;
     }[];
   }[];
 }) {
@@ -137,33 +138,41 @@ export function NavMain({
                 </CollapsibleTrigger>
                 <CollapsibleContent>
                   <SidebarMenuSub>
-                    {item.items?.map((subItem) => (
-                      <SidebarMenuSubItem key={subItem.title}>
-                        <SidebarMenuSubButton
-                          asChild
-                          isActive={pathname === subItem.url}
-                        >
-                          <Link href={subItem.url}>
-                            {subItem?.logo ? (
-                              subItem.logo.includes("http") ? (
-                                <Image
-                                  src={subItem.logo}
-                                  alt={subItem.title}
-                                  width={400}
-                                  height={128}
-                                  className="w-32 h-32 object-cover rounded-t"
-                                />
+                    {item.items?.map((subItem) => {
+                      // For events, only highlight if we're on the specific event page
+                      const isSubItemActive =
+                        item.title === "Events"
+                          ? subItem.isActive // Use the isActive prop we set in the sidebar
+                          : pathname === subItem.url; // For other items, use URL matching
+
+                      return (
+                        <SidebarMenuSubItem key={subItem.title}>
+                          <SidebarMenuSubButton
+                            asChild
+                            isActive={isSubItemActive}
+                          >
+                            <Link href={subItem.url}>
+                              {subItem?.logo ? (
+                                subItem.logo.includes("http") ? (
+                                  <Image
+                                    src={subItem.logo}
+                                    alt={subItem.title}
+                                    width={400}
+                                    height={128}
+                                    className="w-32 h-32 object-cover rounded-t"
+                                  />
+                                ) : (
+                                  <div className="text-md">{subItem.logo}</div>
+                                )
                               ) : (
-                                <div className="text-md">{subItem.logo}</div>
-                              )
-                            ) : (
-                              <GalleryVerticalEnd className="size-4 text-primary" />
-                            )}
-                            <span>{subItem.title}</span>
-                          </Link>
-                        </SidebarMenuSubButton>
-                      </SidebarMenuSubItem>
-                    ))}
+                                <GalleryVerticalEnd className="size-4 text-primary" />
+                              )}
+                              <span>{subItem.title}</span>
+                            </Link>
+                          </SidebarMenuSubButton>
+                        </SidebarMenuSubItem>
+                      );
+                    })}
                   </SidebarMenuSub>
                 </CollapsibleContent>
               </SidebarMenuItem>
