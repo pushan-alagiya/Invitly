@@ -142,10 +142,15 @@ const Permission = ({ children }: PermissionProps) => {
       const restrictedRoutes = notAllowedRoutes["Unauthenticated"];
       const isRestricted = restrictedRoutes?.some((route: string) => {
         if (route.includes("[id]")) {
-          const dynamicRoute = route.split("[id]")[0];
-          return path.startsWith(dynamicRoute);
+          // Convert pattern to regex: /projects/[id]/settings -> /projects/\d+/settings
+          const regexPattern = route
+            .replace(/\[id\]/g, "\\d+")
+            .replace(/\//g, "\\/");
+          const regex = new RegExp(`^${regexPattern}`);
+          return regex.test(path);
         }
-        return path.startsWith(route);
+        // For exact routes, match the route itself or any sub-route
+        return path === route || path.startsWith(route + "/");
       });
 
       if (isRestricted) {
@@ -164,10 +169,15 @@ const Permission = ({ children }: PermissionProps) => {
         const restrictedRoutes = notAllowedRoutes[roleName] || [];
         const isRestricted = restrictedRoutes?.some((route: string) => {
           if (route.includes("[id]")) {
-            const dynamicRoute = route.split("[id]")[0];
-            return path.startsWith(dynamicRoute);
+            // Convert pattern to regex: /projects/[id]/settings -> /projects/\d+/settings
+            const regexPattern = route
+              .replace(/\[id\]/g, "\\d+")
+              .replace(/\//g, "\\/");
+            const regex = new RegExp(`^${regexPattern}`);
+            return regex.test(path);
           }
-          return path.startsWith(route);
+          // For exact routes, match the route itself or any sub-route
+          return path === route || path.startsWith(route + "/");
         });
 
         if (isRestricted) {
@@ -195,20 +205,24 @@ const Permission = ({ children }: PermissionProps) => {
         for (const [routePattern, requiredPermissions] of Object.entries(
           userPermissionRoutes
         )) {
-          if (routePattern.includes("[id]")) {
-            const dynamicRoute = routePattern.split("[id]")[0];
-            if (path.startsWith(dynamicRoute)) {
-              console.log("Checking dynamic route:", dynamicRoute);
-              if (!hasPermission(requiredPermissions)) {
-                console.log("Permission denied for dynamic route");
-                router.replace("/not-allowed");
-                return;
-              }
+          // Helper function to match dynamic routes
+          const matchesRoute = (pattern: string, currentPath: string): boolean => {
+            if (pattern.includes("[id]")) {
+              // Convert pattern to regex: /projects/[id]/settings -> /projects/\d+/settings
+              const regexPattern = pattern
+                .replace(/\[id\]/g, "\\d+")
+                .replace(/\//g, "\\/");
+              const regex = new RegExp(`^${regexPattern}$`);
+              return regex.test(currentPath);
+            } else {
+              return currentPath === pattern;
             }
-          } else if (path === routePattern) {
-            console.log("Checking exact route:", routePattern);
+          };
+
+          if (matchesRoute(routePattern, path)) {
+            console.log("Route matched:", routePattern, "for path:", path);
             if (!hasPermission(requiredPermissions)) {
-              console.log("Permission denied for exact route");
+              console.log("Permission denied for route:", routePattern);
               router.replace("/not-allowed");
               return;
             }
