@@ -36,6 +36,7 @@ A powerful Canva-style editor for creating beautiful wedding invitations:
 
 ![Project Management](https://github.com/pushan-alagiya/Invitly/blob/main/Images/Screenshot%202026-01-23%20110125.png?raw=true)
 
+![Guest Management](https://github.com/pushan-alagiya/Invitly/blob/main/Images/Screenshot%202026-01-23%20110145.png?raw=true)
 
 ### 📋 **Project & Event Management**
 
@@ -50,7 +51,6 @@ A powerful Canva-style editor for creating beautiful wedding invitations:
 
 ### 👥 **Guest List Management**
 
-![Guest Management](https://github.com/pushan-alagiya/Invitly/blob/main/Images/Screenshot%202026-01-23%20110145.png?raw=true)
 
 - **Smart Categorization**: Organize guests by categories (Family, Friends, Colleagues, etc.)
 - **RSVP Tracking**: Real-time RSVP status tracking
