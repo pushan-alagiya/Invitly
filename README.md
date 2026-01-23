@@ -8,6 +8,8 @@ A comprehensive, full-stack wedding invitation management platform built with Ne
 
 Invity is a modern, feature-rich platform designed to simplify wedding planning and invitation management. From creating stunning digital invitations to tracking guest responses, managing events, and analyzing engagement metrics - everything you need in one place.
 
+This README focuses on the frontend app. If you have a companion backend, run it alongside the frontend for full functionality (image uploads, authentication, email sending, etc.).
+
 ![Dashboard View](https://raw.githubusercontent.com/pushan-alagiya/Backend-Boilerplate-CLI/master/frontend/Images/Screenshot%202026-01-23%20105932.png)
 
 ## ✨ Key Features
@@ -23,6 +25,7 @@ A powerful Canva-style editor for creating beautiful wedding invitations:
 - **Real-time Preview**: See changes instantly as you design
 - **Rich Text Editing**: 14+ wedding-specific fonts with full styling options
 - **Image Management**: Upload, import from URLs, or use stock image library
+- **AI Image Transforms**: AI-assisted image transformations and uploads via ImageKit
 - **Shape Library**: Decorative shapes, wedding icons, and vector graphics
 - **Layer Management**: Professional layer panel with show/hide, lock, and reorder
 - **Export Options**: Export as PDF for printing or PNG for digital sharing
@@ -99,7 +102,7 @@ A powerful Canva-style editor for creating beautiful wedding invitations:
 
 ### Frontend
 - **Framework**: Next.js 15.2.3 (App Router)
-- **UI Library**: React 18.3.1
+- **UI Library**: React 18.3.1 with TypeScript
 - **Styling**: Tailwind CSS 4
 - **State Management**: Redux Toolkit with Redux Persist
 - **UI Components**: Radix UI primitives
@@ -108,6 +111,8 @@ A powerful Canva-style editor for creating beautiful wedding invitations:
 - **Forms**: Formik with Yup validation
 - **Animations**: Framer Motion 12.19.2
 - **Icons**: Lucide React, Tabler Icons
+- **HTTP Client**: Axios
+- **Image Processing**: ImageKit (uploads and transformations) via backend endpoints
 
 ### Backend
 - **Runtime**: Node.js
@@ -138,9 +143,13 @@ frontend/
 │   ├── forms/                   # Form components
 │   ├── landing/                 # Landing page components
 │   └── ui/                      # Reusable UI components
-├── api/                         # API routes
+├── api/                         # API routes and client (ApiClient.ts)
+├── lib/                         # Services and helpers
+│   ├── imagekit-service.ts     # ImageKit integration
+│   └── utils/                   # Utility functions
 ├── store/                       # Redux store configuration
-├── utils/                       # Utility functions
+├── public/                      # Static assets
+├── styles/                      # Global styles (or app/globals.css)
 └── Images/                      # Project screenshots
 ```
 
@@ -148,10 +157,11 @@ frontend/
 
 ### Prerequisites
 
-- Node.js 18.x or 20.x (LTS)
+- Node.js 18.x or 20.x (LTS recommended)
 - npm, yarn, pnpm, or bun
-- MySQL database
-- Backend API server running
+- Git
+- MySQL database (for backend)
+- Backend API server running and reachable
 
 ### Installation
 
@@ -177,9 +187,15 @@ frontend/
    
    Configure the following variables:
    ```env
-   NEXT_PUBLIC_API_URL=http://localhost:5000/api/v1
+   NEXT_PUBLIC_BASE_URL=http://localhost:8001/api
+   NEXT_PUBLIC_APP_NAME=Invity
+   NEXT_PUBLIC_VERSION=v1
    NEXT_PUBLIC_IMAGEKIT_URL=your_imagekit_url
    ```
+
+   **Note**: The frontend constructs requests with `BASE_URL + '/' + APP_VERSION` and then passes path strings such as `/imagekit/upload`. So if you keep defaults the frontend will call `http://localhost:8001/api/v1/imagekit/upload`.
+
+   **Important**: Sensitive keys (ImageKit private keys, database credentials, email provider secrets) belong in the backend. The frontend only relies on backend endpoints for secure operations (signature, uploads, etc.).
 
 4. **Run the development server**
    ```bash
@@ -192,6 +208,13 @@ frontend/
 
 5. **Open your browser**
    Navigate to [http://localhost:3000](http://localhost:3000)
+
+### Available Scripts
+
+- `npm run dev` — start Next.js in development (with turbopack)
+- `npm run build` — build for production
+- `npm run start` — start the production server after build
+- `npm run lint` — run linter
 
 ## 📖 Usage Guide
 
@@ -261,6 +284,8 @@ The platform supports 7 permission levels:
 - **Layer Management**: Professional layer panel with full control
 - **Export Options**: High-quality PDF and PNG export
 - **Keyboard Shortcuts**: Power user shortcuts for faster editing
+- **Multi-page Templates**: Support for multi-page templates and layers
+- **AI Image Processing**: AI-assisted image transformations via ImageKit
 
 ### Guest Management Features
 
@@ -281,6 +306,57 @@ The platform supports 7 permission levels:
 - **Loading States**: Beautiful loading indicators
 - **Error Handling**: User-friendly error messages
 
+## 🔌 Backend Integration
+
+### Backend Endpoints
+
+The frontend uses the `BaseClient` Axios instance to hit endpoints under the configured base URL + API version. Important endpoints used by the image/upload features:
+
+- `POST /imagekit/auth-params` — request a signed ImageKit upload payload from the backend
+- `POST /imagekit/upload` — backend handles the actual upload to ImageKit
+- `POST /imagekit/ai-transform` — request AI image processing / generative edits
+- `GET /imagekit/uploaded-images` — list images already uploaded
+
+Other frontend features (guests, invitations, templates, admin) assume typical REST endpoints under the same API base (for example `/guests`, `/invitations`, `/templates`, etc.). Check the backend repo for exact routes and payloads.
+
+### ImageKit & Editor Notes
+
+- The frontend includes `lib/imagekit-service.ts` which contains a `demoMode` flag (default: `false`). When `demoMode` is `true` the service returns placeholder/demo images and doesn't call the backend. Toggle this for offline UI development or demos.
+- The visual editor lives under `components/editor/*`. It uses Fabric.js and helper libraries (Jimp, jspdf) for image manipulation and export.
+- For full image upload and AI operations, ensure the backend is configured with ImageKit keys and exposes the signed endpoints listed above.
+- Templates are stored and loaded by the frontend via template endpoints. The editor supports multi-page templates and layers (see `MultiPageEditor.tsx`, `LayerPanel.tsx`, `JsonCanvas.tsx`).
+- Exporting: PDF and image export uses `jspdf` / `pdf-lib` and browser APIs to generate downloadable files.
+
+## 🐛 Troubleshooting
+
+- **Uploads failing / 403 / 401**: Verify `NEXT_PUBLIC_BASE_URL` points to a running backend that returns signed params for ImageKit. Check backend logs for request details.
+- **CORS errors**: Ensure backend allows your frontend origin in CORS settings.
+- **Editor rendering issues**: Fabric depends on correct canvas initialization — try clearing application state or check console for Fabric errors.
+- **Running frontend without backend**: If you want to run frontend without backend for UI-only work, set `demoMode = true` in `lib/imagekit-service.ts` to avoid network calls and get mock images.
+
+## 🔍 Linting & Type Checks
+
+- **Lint**: `npm run lint`
+- **TypeScript**: TypeScript types are included; run `tsc --noEmit` if you need a full typecheck outside the Next build.
+
+## 🚢 Deployment
+
+### Recommended: Vercel
+
+Vercel supports Next.js out-of-the-box. Set the environment variables in your Vercel project dashboard.
+
+### Production Server
+
+On your production server, run:
+
+```bash
+npm install --production
+npm run build
+npm run start
+```
+
+Make sure the backend is available to the production frontend and that production env vars are configured.
+
 ## 📚 Documentation
 
 - [Template Editor Guide](./README-EDITOR.md) - Complete guide to the template creator
@@ -296,6 +372,10 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
 4. Push to the branch (`git push origin feature/AmazingFeature`)
 5. Open a Pull Request
+
+**Guidelines**:
+- Please follow existing project conventions (TypeScript, React hooks, and Tailwind for styling)
+- Add unit tests or integration tests for new features where appropriate
 
 ## 📄 License
 
