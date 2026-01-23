@@ -32,9 +32,14 @@ A powerful Canva-style editor for creating beautiful wedding invitations:
 
 ![Editor Features](https://github.com/pushan-alagiya/Invitly/blob/main/Images/Screenshot%202026-01-23%20110116.png?raw=true)
 
-### 📋 **Project & Event Management**
+![Invitation System](https://github.com/pushan-alagiya/Invitly/blob/main/Images/Screenshot%202026-01-23%20110156.png?raw=true)
 
 ![Project Management](https://github.com/pushan-alagiya/Invitly/blob/main/Images/Screenshot%202026-01-23%20110125.png?raw=true)
+
+
+### 📋 **Project & Event Management**
+
+![Access Control](https://github.com/pushan-alagiya/Invitly/blob/main/Images/Screenshot%202026-01-23%20110232.png?raw=true)
 
 - **Multi-Project Support**: Create and manage multiple wedding projects
 - **Event Organization**: Organize multiple events within each project
@@ -56,7 +61,6 @@ A powerful Canva-style editor for creating beautiful wedding invitations:
 
 ### 📧 **Smart Invitations & Tracking**
 
-![Invitation System](https://github.com/pushan-alagiya/Invitly/blob/main/Images/Screenshot%202026-01-23%20110156.png?raw=true)
 
 - **Digital Invitations**: Send beautiful, personalized digital invitations
 - **Email Integration**: Automated email sending with templates
@@ -66,8 +70,7 @@ A powerful Canva-style editor for creating beautiful wedding invitations:
 - **Multi-language Support**: Send invitations in multiple languages
 
 ### 🔐 **Advanced Permission System**
-
-![Access Control](https://github.com/pushan-alagiya/Invitly/blob/main/Images/Screenshot%202026-01-23%20110232.png?raw=true)
+![Analytics Dashboard](https://github.com/pushan-alagiya/Invitly/blob/main/Images/Screenshot%202026-01-23%20110328.png?raw=true)
 
 - **Role-Based Access Control (RBAC)**: Multiple roles (ADMIN, USER, MODERATOR, EDITOR, etc.)
 - **Resource-Action Permissions**: Granular permissions based on resources and actions
@@ -78,7 +81,7 @@ A powerful Canva-style editor for creating beautiful wedding invitations:
 
 ### 📊 **Analytics & Reporting**
 
-![Analytics Dashboard](https://github.com/pushan-alagiya/Invitly/blob/main/Images/Screenshot%202026-01-23%20110328.png?raw=true)
+![Admin Panel](https://github.com/pushan-alagiya/Invitly/blob/main/Images/Screenshot%202026-01-23%20110357.png?raw=true)
 
 - **Dashboard Analytics**: Comprehensive overview of all projects and events
 - **Guest Analytics**: Track guest engagement and response patterns
@@ -89,7 +92,6 @@ A powerful Canva-style editor for creating beautiful wedding invitations:
 
 ### 👨‍💼 **Admin Dashboard**
 
-![Admin Panel](https://github.com/pushan-alagiya/Invitly/blob/main/Images/Screenshot%202026-01-23%20110357.png?raw=true)
 
 - **User Management**: Manage all users, roles, and permissions
 - **System Health**: Monitor system performance and status
