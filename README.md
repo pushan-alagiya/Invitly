@@ -2,7 +2,7 @@
 
 A comprehensive, full-stack wedding invitation management platform built with Next.js, React, and Node.js. Create beautiful invitations, manage guest lists, track RSVPs, and organize your entire wedding event seamlessly.
 
-![Project Overview](https://raw.githubusercontent.com/pushan-alagiya/Backend-Boilerplate-CLI/master/frontend/Images/Screenshot%202026-01-23%20100858.png)
+![Project Overview](https://raw.githubusercontent.com/pushan-alagiya/Backend-Boilerplate-CLI/master/Images/Screenshot%202026-01-23%20100858.png)
 
 ## 🎯 Overview
 
@@ -10,7 +10,7 @@ Invity is a modern, feature-rich platform designed to simplify wedding planning 
 
 This README focuses on the frontend app. If you have a companion backend, run it alongside the frontend for full functionality (image uploads, authentication, email sending, etc.).
 
-![Dashboard View](https://raw.githubusercontent.com/pushan-alagiya/Backend-Boilerplate-CLI/master/frontend/Images/Screenshot%202026-01-23%20105932.png)
+![Dashboard View](https://raw.githubusercontent.com/pushan-alagiya/Backend-Boilerplate-CLI/master/Images/Screenshot%202026-01-23%20105932.png)
 
 ## ✨ Key Features
 
@@ -18,7 +18,7 @@ This README focuses on the frontend app. If you have a companion backend, run it
 
 A powerful Canva-style editor for creating beautiful wedding invitations:
 
-![Template Creator](https://raw.githubusercontent.com/pushan-alagiya/Backend-Boilerplate-CLI/master/frontend/Images/Screenshot%202026-01-23%20110024.png)
+![Template Creator](https://raw.githubusercontent.com/pushan-alagiya/Backend-Boilerplate-CLI/master/Images/Screenshot%202026-01-23%20110024.png)
 
 - **Canvas-Based Design**: High-quality canvas rendering with Fabric.js
 - **Multiple Canvas Sizes**: Support for Portrait, Square, and Landscape formats
@@ -30,11 +30,11 @@ A powerful Canva-style editor for creating beautiful wedding invitations:
 - **Layer Management**: Professional layer panel with show/hide, lock, and reorder
 - **Export Options**: Export as PDF for printing or PNG for digital sharing
 
-![Editor Features](https://raw.githubusercontent.com/pushan-alagiya/Backend-Boilerplate-CLI/master/frontend/Images/Screenshot%202026-01-23%20110116.png)
+![Editor Features](https://raw.githubusercontent.com/pushan-alagiya/Backend-Boilerplate-CLI/master/Images/Screenshot%202026-01-23%20110116.png)
 
 ### 📋 **Project & Event Management**
 
-![Project Management](https://raw.githubusercontent.com/pushan-alagiya/Backend-Boilerplate-CLI/master/frontend/Images/Screenshot%202026-01-23%20110125.png)
+![Project Management](https://raw.githubusercontent.com/pushan-alagiya/Backend-Boilerplate-CLI/master/Images/Screenshot%202026-01-23%20110125.png)
 
 - **Multi-Project Support**: Create and manage multiple wedding projects
 - **Event Organization**: Organize multiple events within each project
@@ -45,7 +45,7 @@ A powerful Canva-style editor for creating beautiful wedding invitations:
 
 ### 👥 **Guest List Management**
 
-![Guest Management](https://raw.githubusercontent.com/pushan-alagiya/Backend-Boilerplate-CLI/master/frontend/Images/Screenshot%202026-01-23%20110145.png)
+![Guest Management](https://raw.githubusercontent.com/pushan-alagiya/Backend-Boilerplate-CLI/master/Images/Screenshot%202026-01-23%20110145.png)
 
 - **Smart Categorization**: Organize guests by categories (Family, Friends, Colleagues, etc.)
 - **RSVP Tracking**: Real-time RSVP status tracking
@@ -56,7 +56,7 @@ A powerful Canva-style editor for creating beautiful wedding invitations:
 
 ### 📧 **Smart Invitations & Tracking**
 
-![Invitation System](https://raw.githubusercontent.com/pushan-alagiya/Backend-Boilerplate-CLI/master/frontend/Images/Screenshot%202026-01-23%20110156.png)
+![Invitation System](https://raw.githubusercontent.com/pushan-alagiya/Backend-Boilerplate-CLI/master/Images/Screenshot%202026-01-23%20110156.png)
 
 - **Digital Invitations**: Send beautiful, personalized digital invitations
 - **Email Integration**: Automated email sending with templates
@@ -67,7 +67,7 @@ A powerful Canva-style editor for creating beautiful wedding invitations:
 
 ### 🔐 **Advanced Permission System**
 
-![Access Control](https://raw.githubusercontent.com/pushan-alagiya/Backend-Boilerplate-CLI/master/frontend/Images/Screenshot%202026-01-23%20110232.png)
+![Access Control](https://raw.githubusercontent.com/pushan-alagiya/Backend-Boilerplate-CLI/master/Images/Screenshot%202026-01-23%20110232.png)
 
 - **Role-Based Access Control (RBAC)**: Multiple roles (ADMIN, USER, MODERATOR, EDITOR, etc.)
 - **Resource-Action Permissions**: Granular permissions based on resources and actions
@@ -78,7 +78,7 @@ A powerful Canva-style editor for creating beautiful wedding invitations:
 
 ### 📊 **Analytics & Reporting**
 
-![Analytics Dashboard](https://raw.githubusercontent.com/pushan-alagiya/Backend-Boilerplate-CLI/master/frontend/Images/Screenshot%202026-01-23%20110328.png)
+![Analytics Dashboard](https://raw.githubusercontent.com/pushan-alagiya/Backend-Boilerplate-CLI/master/Images/Screenshot%202026-01-23%20110328.png)
 
 - **Dashboard Analytics**: Comprehensive overview of all projects and events
 - **Guest Analytics**: Track guest engagement and response patterns
@@ -89,7 +89,7 @@ A powerful Canva-style editor for creating beautiful wedding invitations:
 
 ### 👨‍💼 **Admin Dashboard**
 
-![Admin Panel](https://raw.githubusercontent.com/pushan-alagiya/Backend-Boilerplate-CLI/master/frontend/Images/Screenshot%202026-01-23%20110357.png)
+![Admin Panel](https://raw.githubusercontent.com/pushan-alagiya/Backend-Boilerplate-CLI/master/Images/Screenshot%202026-01-23%20110357.png)
 
 - **User Management**: Manage all users, roles, and permissions
 - **System Health**: Monitor system performance and status
