@@ -1,4 +1,4 @@
-const UNSPLASH_ACCESS_KEY = "gC03036rzRx09_cE4ovZo7KbFXVfZWWcM7A5Bkt4cjk";
+const UNSPLASH_ACCESS_KEY = "gC03036rzRxxxxxxxxxxxxxxxxxxxxxxxkt4cjk";
 
 export interface UnsplashImage {
   id: string;
